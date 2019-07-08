@@ -1,98 +1,100 @@
 # -*- coding: utf-8 -*-
 """
-Created on Sat May 18 21:57:47 2019
+Created on Tue May 28 21:30:49 2019
 
-@author: tkapetano
+@author: tempo
 """
+
+# the layers / components of Glow
 
 from __future__ import absolute_import, division, print_function, unicode_literals
 import tensorflow as tf
 from tensorflow.keras import layers
-import numpy as np
-import matplotlib.pyplot as plt
+from helper import int_shape, split_along_channels
 
-
-
-class Squeeze(layers.Layer):
-    """Squeeze layer (Shi 2014).
+class Squeeze(tf.keras.layers.Layer):
+    """Squeeze layer (Shi et. al. 2016).
     Simple transformation that trades spatial dimensions for a greater number of channels. 
     No trainable parameters.
-    # Arguments
-        
-    # Input shape
-        Needs to have even spatial dimensions. Use the keyword argument `input_shape`
-        (tuple of integers, does not include the samples axis)
+    # Input shape: Needs to have even spatial dimensions. Use the keyword 
+        argument `input_shape` (tuple of integers, does not include the samples axis)
         when using this layer as the first layer in a model.
-    # Output shape
-        If input is a b x h x w x c tensor, output is b x h/2 x w/2 x 4*c.
-    # References
-        -
+    # Output shape: If input is a b x h x w x c tensor, output is b x h/2 x w/2 x 4*c.
     """
-    def __init__(self, name='squeeze', **kwargs):
+    def __init__(self, factor=2, name='squeeze', **kwargs):
         super(Squeeze, self).__init__(name=name, **kwargs)
+        self.factor = factor
                                                
     def call(self, inputs):
         shape = inputs.get_shape()
         h, w, c = int(shape[1]), int(shape[2]), int(shape[3])
-        assert h % 2 == 0 and w % 2 == 0
-        y = tf.reshape(inputs, [-1, h//2, 2, w//2, 2, c])
+        assert h % self.factor == 0 and w % self.factor == 0
+        y = tf.reshape(inputs, [-1, h//self.factor, self.factor, w//self.factor, self.factor, c])
         y = tf.transpose(y, [0, 1, 3, 5, 2, 4])
-        y = tf.reshape(y, [-1, h//2, w //2, 4*c])
+        y = tf.reshape(y, [-1, h//self.factor, w //self.factor, self.factor*self.factor*c])
         return y
       
     def invert(self, outputs):
         shape = outputs.get_shape()
         h, w, c = int(shape[1]), int(shape[2]), int(shape[3])
-        assert c >= 4 and c % 4 == 0
-        x = tf.reshape(outputs, [-1, h, w, c//4, 2, 2])
+        square = self.factor*self.factor
+        assert c >= square and c % square == 0
+        x = tf.reshape(outputs, [-1, h, w, c//square, self.factor, self.factor])
         x = tf.transpose(x, [0, 1, 4, 2, 5, 3])
-        x = tf.reshape(x, [-1, 2*h, 2*w, c//4])
+        x = tf.reshape(x, [-1, self.factor*h, self.factor*w, c//square])
         return x
-        
 
-        
+
 class Actnorm(layers.Layer):
-    """Activation normalization layer (Kingma and Dharwal, 2014).
+    """Activation normalization layer (Kingma and Dhariwal, 2018).
     Use a affine transformation to standardize mean and variance
-    # Arguments
-        scale: If True, multiply by scale vector s
-        bias: If True, add bias vector b
-    # Input shape
-        Arbitrary. 
-    # Output shape
-        Same shape as input.
-    # References
-        - 
+    # Arguments: - scale: If True, multiply by scale vector s
+                 - bias: If True, add bias vector b
+    # Input shape: Arbitrary. 
+    # Output shape: Same shape as input.
     """
-    def __init__(self, ml=True, name='actnorm', **kwargs):
-        super(Actnorm, self).__init__(name=name, **kwargs)
+    def __init__(self, ml=True, data_depent_init=None, name='actnorm', **kwargs):
+        super(Actnorm, self).__init__(name=name, **kwargs) #dynamic=True, **kwargs)
         self.ml = ml
+        self.data_depent_init = data_depent_init
+ 
         
     def build(self, input_shape):
         self.channels = int(input_shape[-1])
+        if self.data_depent_init:
+             scale_init, bias_init = self.data_depent_init()
+        else:
+            scale_init, bias_init = 'random_normal', 'random_normal'
+            
         self.scale = self.add_weight(shape=(self.channels,),
-                               initializer='random_normal',
+                               initializer=scale_init,
                                trainable=True)
         self.bias = self.add_weight(shape=(self.channels,),
-                                initializer='random_normal',
+                                initializer=bias_init,
                                 trainable=True)
                                                
     def call(self, inputs):
+        dims = int_shape(inputs)
         if self.ml: 
             # add loss for max likelihood term
-            log_det = - tf.reduce_sum(tf.math.log(tf.math.abs(self.scale)))
+            log_det = - dims[1] * dims[2] * tf.reduce_sum(tf.math.log(tf.math.abs(self.scale)))
             #print('this is actnorm:' + str(log_det))
             self.add_loss(log_det)
-        # forward pass
-        s = tf.reshape(self.scale, (1, 1, self.channels))
-        b = tf.reshape(self.bias, (1, 1, self.channels))
+        # forward pass - channelwise ops
+        s = tf.reshape(self.scale, [1, 1, self.channels])
+        b = tf.reshape(self.bias, [1, 1, self.channels])
+        #print(s)
+        #print(b)
         return inputs * s + b
         
         
     def invert(self, outputs):
-        s = tf.reshape(self.scale, (1, 1, self.channels))
-        b = tf.reshape(self.bias, (1, 1, self.channels))
-        return (outputs - b) / s    
+        s = tf.reshape(self.scale, [1, 1, self.channels])
+        b = tf.reshape(self.bias, [1, 1, self.channels])
+        return (outputs - b) / s  
+        
+    def compute_output_shape(self, input_shape):
+        return input_shape
         
     def get_config(self):
         config = {
@@ -103,18 +105,19 @@ class Actnorm(layers.Layer):
         base_config = super(Actnorm, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
         
+#ml = True # the most general setting
+#squeeze = Squeeze()
+#actn = Actnorm(ml)      
+#inputs = tf.ones([4, 2, 2, 2])
+#actnormed = actn(inputs)
+#print(actn.losses)      
+      
         
- 
 class Conv1x1(layers.Layer):
-    """Invertible 1x1 convolution layer (Kingma and Dharwal, 2014).
-    A generalized permutation of channels as preparation for a coupling layer
-    # Arguments
-    # Input shape
-        Arbitrary. 
-    # Output shape
-        Same shape as input.
-    # References
-        - 
+    """Invertible 1x1 convolution layer (Kingma and Dhariwal, 2018).
+    A generalized permutation of channels as preparation for a coupling layer.
+    # Input shape:  Arbitrary. 
+    # Output shape:  Same shape as input.
     """
     def __init__(self, ml=True, name='conv1x1', **kwargs):
         super(Conv1x1, self).__init__(name=name, **kwargs)
@@ -139,7 +142,9 @@ class Conv1x1(layers.Layer):
         
         
     def invert(self, outputs):
+        #print('Inverting ..')
         w_inv = tf.linalg.inv(self.w)
+        #print('Entry {}, and {}'.format(w_inv[0][0], w_inv[1][0]))
         w_filter = tf.reshape(w_inv, [1,1, self.channels, self.channels])
         return tf.nn.conv2d(outputs, w_filter, [1,1,1,1], 'SAME')
         
@@ -152,19 +157,14 @@ class Conv1x1(layers.Layer):
         return dict(list(base_config.items()) + list(config.items()))
         
 
-# coupling layer with nn integrated
 class CouplingLayer2(layers.Layer):
-    """Affine Coupling layer (Dinh.., 2014).
+    """Affine Coupling layer (Dinh, Krueger, Bengio 2015).
     A generalized permutation of channels as preparation for a coupling layer
     # Arguments
         nn: A shallow neural network. In- and output shape need to be equal.
-    # Input shape
-        Needs to have an even number of channels. Recommended to have 
-        some permuation of the channels preceeding this layer.
-    # Output shape
-        Same shape as input.
-    # References
-        - 
+    # Input shape:  Needs to have an even number of channels. Recommended to have 
+            some permuation of the channels preceeding this layer, e.g. 1x1 Convolution
+    # Output shape: Same shape as input.
     """
     def __init__(self, ml=True, name='conv1x1', **kwargs):
         super(CouplingLayer2, self).__init__(name=name, **kwargs)
@@ -188,10 +188,8 @@ class CouplingLayer2(layers.Layer):
                                    kernel_initializer='zeros')
                                                
     def call(self, inputs):
-        # split along channels
-        c_half = int(inputs.shape[-1]) // 2
-        x_a = inputs[:, :, :, :c_half]
-        x_b = inputs[:, :, :, c_half:]
+        #print(inputs.get_shape())
+        x_a, x_b = split_along_channels(inputs)
         # apply the neural net to first partition component to get scaling 
         # and translation parameters
         intermediate = self.conv3(self.conv2(self.conv1(x_a)))
@@ -204,51 +202,34 @@ class CouplingLayer2(layers.Layer):
             #print('this is coupling ' + str(log_det))
             self.add_loss(log_det)
         # forward pass
-        scale = tf.math.exp(s)
+        #scale = tf.math.exp(s)
+        scale = tf.nn.sigmoid(s + 2.)
         y_b = x_b * scale + t
         return tf.concat([x_a,y_b], 3)
         
         
     def invert(self, outputs):
         # split along channels
-        c_half = int(outputs.shape[-1]) // 2
-        y_a = outputs[:, :, :, :c_half]
-        y_b = outputs[:, :, :, c_half:]
+        y_a, y_b = split_along_channels(outputs)
         # apply nn
-        intermediate = self.conv3(self.conv2(self.conv1(y_b)))
+        intermediate = self.conv3(self.conv2(self.conv1(y_a)))
         t = intermediate[:, :, :, 0::2]
         s = intermediate[:, :, :, 1::2]
         # backward pass
-        scale = tf.math.exp(s)
-        x_a = (y_a - t) / scale
-        return tf.concat([x_a,y_b], 3)
+        #scale = tf.math.exp(s)
+        scale = tf.nn.sigmoid(s + 2.)
+        x_b = (y_b - t) / scale
+        return tf.concat([y_a,x_b], 3)
         
     def get_config(self):
         config = {
         }
         base_config = super(CouplingLayer2, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
+        
 
-
-class Glowblock(layers.Layer):
-    def __init__(self, input_shape, ml=True, **kwargs):
-        super(Glowblock, self).__init__(**kwargs)
-        self.squeeze = Squeeze()
-        self.actn = Actnorm()
-        self.conv1x1 = Conv1x1(ml)
-        self.coupling = CouplingLayer2(ml)
-        
-        
-    def call(self, inputs):
-        y = self.squeeze(inputs)
-        y = self.actn(y)
-        y = self.conv1x1(y)
-        y = self.coupling(y)
-        return  self.squeeze.invert(y)
-        
-    def invert(self, outputs):
-        x = self.squeeze(outputs)
-        x = self.coupling.invert(x)
-        x = self.conv1x1.invert(x)
-        x = self.actn.invert(x)
-        return self.squeeze.invert(x)
+#ml = True # the most general setting
+#coup = CouplingLayer2(ml)    
+#inputs = tf.ones([4, 2, 2, 2])
+#actnormed = coup(inputs)
+#print(coup.losses)      
