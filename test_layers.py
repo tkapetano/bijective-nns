@@ -2,7 +2,7 @@
 """
 Created on Tue May 28 21:47:15 2019
 
-@author: tempo
+@author: tkapetano
 """
 
 from __future__ import absolute_import, division, print_function, unicode_literals
@@ -15,7 +15,7 @@ import unittest
 
 class TestCaseLayers(unittest.TestCase):
     """
-    Testing the individual layers of the module 'layers.py'
+    Testing individual layers of the module 'layers.py'
     """
     def setUp(self):
         ml = True # the most general setting
@@ -83,13 +83,11 @@ class TestCaseLayers(unittest.TestCase):
         decoupled = self.coupling.invert(coupled)
         self.assertLessEqual(self.dist(squeezed, decoupled), 1e-5)
         
-    
+#TODO: test Losses 
 #    def testLosses(self):
 #        inputs = tf.ones([4, 2, 2, 2])
 #        actnormed = self.actn(inputs)
 #        #print(self.actn.losses)
-    
-    
     
         
 if __name__ == '__main__':

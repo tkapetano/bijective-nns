@@ -2,7 +2,7 @@
 """
 Created on Tue May 28 21:47:15 2019
 
-@author: tempo
+@author: tkapetano
 """
 
 from __future__ import absolute_import, division, print_function, unicode_literals
@@ -16,7 +16,7 @@ import unittest
 
 class TestCaseBlocks(unittest.TestCase):
     """
-    Testing the block components of the module 'blocks.py'
+    Testing block components of the module 'blocks.py'
     """
     def setUp(self):
         ml = True # the most general setting
@@ -51,14 +51,8 @@ class TestCaseBlocks(unittest.TestCase):
         flowacn = self.flow(inputs)
         recon_flowacn = self.flow.invert(flowacn)
         self.assertLessEqual(self.dist(inputs, recon_flowacn), 1e-5)
-        
-        #self.assertAlmostEqual(inputs, recon_flowacn)
-    
-    
-    
-    
-    
-    
+   
+      
         
 if __name__ == '__main__':
     unittest.main()

@@ -2,10 +2,16 @@
 """
 Created on Tue May 28 21:38:15 2019
 
-@author: tempo
+@author: tkapetano
+
+Collection of blocks and classifiers:
+    - FlowstepACN
+    - ClassifierACN
+    - FlowstepBN
+    - ClassifierBN
+
 """
 
-# blocks
 
 from __future__ import absolute_import, division, print_function, unicode_literals
 import tensorflow as tf

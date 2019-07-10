@@ -2,10 +2,16 @@
 """
 Created on Tue May 28 21:30:49 2019
 
-@author: tempo
+@author: tkapetano
+
+Collection of invertable layer architectures:
+    - Squeeze
+    - Actnorm
+    - Conv1x1
+    - CouplingLayer2
 """
 
-# the layers / components of Glow
+
 
 from __future__ import absolute_import, division, print_function, unicode_literals
 import tensorflow as tf
@@ -105,13 +111,6 @@ class Actnorm(layers.Layer):
         base_config = super(Actnorm, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
         
-#ml = True # the most general setting
-#squeeze = Squeeze()
-#actn = Actnorm(ml)      
-#inputs = tf.ones([4, 2, 2, 2])
-#actnormed = actn(inputs)
-#print(actn.losses)      
-      
         
 class Conv1x1(layers.Layer):
     """Invertible 1x1 convolution layer (Kingma and Dhariwal, 2018).
@@ -142,9 +141,7 @@ class Conv1x1(layers.Layer):
         
         
     def invert(self, outputs):
-        #print('Inverting ..')
         w_inv = tf.linalg.inv(self.w)
-        #print('Entry {}, and {}'.format(w_inv[0][0], w_inv[1][0]))
         w_filter = tf.reshape(w_inv, [1,1, self.channels, self.channels])
         return tf.nn.conv2d(outputs, w_filter, [1,1,1,1], 'SAME')
         
@@ -188,7 +185,6 @@ class CouplingLayer2(layers.Layer):
                                    kernel_initializer='zeros')
                                                
     def call(self, inputs):
-        #print(inputs.get_shape())
         x_a, x_b = split_along_channels(inputs)
         # apply the neural net to first partition component to get scaling 
         # and translation parameters
@@ -227,9 +223,4 @@ class CouplingLayer2(layers.Layer):
         base_config = super(CouplingLayer2, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
         
-
-#ml = True # the most general setting
-#coup = CouplingLayer2(ml)    
-#inputs = tf.ones([4, 2, 2, 2])
-#actnormed = coup(inputs)
-#print(coup.losses)      
+ 
