@@ -17,7 +17,7 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 import tensorflow as tf
 from tensorflow.keras import layers
 from layers import Squeeze, Actnorm, Conv1x1, CouplingLayer2
-from helper import split_along_channels
+from helper import split_along_channels, int_shape
 
 
 class FlowstepACN(layers.Layer):
@@ -61,7 +61,59 @@ class ClassifierACN(tf.keras.Model):
         y = self.flat(y_aa)
         y = self.dense(y)
         return tf.nn.softmax(y)
+        
+        
 
+class ClassifierInv(ClassifierACN):
+    def __init__(self, label_classes, ml=False, **kwargs):
+        super(ClassifierInv, self).__init__(label_classes, ml=False, **kwargs)
+        self.squeeze = Squeeze()
+        self.flow_1 = FlowstepACN(ml)
+        self.flow_2 = FlowstepACN(ml)
+        self.split = split_along_channels
+        self.flow_3 = FlowstepACN(ml)
+        self.flat_first = layers.Flatten()
+        self.flat_second = layers.Flatten()
+        self.flat_last = layers.Flatten()
+        self.dense = layers.Dense(label_classes)
+          
+    def call(self, inputs, training=None):
+        y = self.squeeze(inputs)
+        y = self.flow_1(y)
+        y = self.flow_2(y)
+        y_a, y_b = self.split(y)
+        #y_b = self.flat_first(y_b)
+        y = self.squeeze(y_a)
+        y = self.flow_3(y)
+        y_aa, y_bb = self.split(y)
+        #y_bb = self.flat_second(y_bb)
+        #y_aa = self.flat_last(y_aa)
+        y = self.dense(y_aa)
+        if training:
+          return tf.nn.softmax(y)
+        else:
+          y = tf.concat((y_aa, y_bb), axis=3)
+          y = tf.reshape(y, y_b.get_shape())
+          return tf.concat((y, y_b), axis=3)
+          
+    def invert(self, z):    
+        shape = int_shape(z)
+        channels = shape[3]
+        assert channels % 2 == 0 and shape[1] % 2 == 0 and shape[0] % 2 == 0
+        #z_1, z_2, z_3 = z[:, :(width//4)], z[:, (width//4):(width//2)], z[:, (width//2):]
+        z_1, z_2 = split_along_channels(z)
+        print(z_1.get_shape())
+        print(z_2.get_shape())
+        z_1 = tf.reshape(z_1, [shape[0], shape[1]//2, shape[2]//2, channels*2])
+        x_1 = self.flow_3.invert(z_1)
+        x_1 = self.squeeze.invert(x_1)
+        x = tf.concat((x_1, z_2), axis=3)
+        x = self.flow_2.invert(x)
+        x = self.flow_1.invert(x)
+        x = self.squeeze.invert(x)
+        return x
+        
+        
 class FlowstepBN(layers.Layer):
     def __init__(self, input_shape, ml=False, **kwargs):
         super(FlowstepBN, self).__init__(**kwargs)
