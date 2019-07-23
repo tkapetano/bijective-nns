@@ -87,23 +87,29 @@ class ClassifierInv(ClassifierACN):
         y = self.flow_3(y)
         y_aa, y_bb = self.split(y)
         #y_bb = self.flat_second(y_bb)
-        #y_aa = self.flat_last(y_aa)
-        y = self.dense(y_aa)
-        if training:
-          return tf.nn.softmax(y)
-        else:
-          y = tf.concat((y_aa, y_bb), axis=3)
-          y = tf.reshape(y, y_b.get_shape())
-          return tf.concat((y, y_b), axis=3)
-          
+        y = self.flat_last(y_aa)
+        y = self.dense(y)
+        return tf.nn.softmax(y)
+        
+                  
+    def compute_z(self, inputs):
+        y = self.squeeze(inputs)
+        y = self.flow_1(y)
+        y = self.flow_2(y)
+        y_a, y_b = self.split(y)
+        y = self.squeeze(y_a)
+        y = self.flow_3(y)
+        y_aa, y_bb = self.split(y)
+        y = tf.concat((y_aa, y_bb), axis=3)
+        y = tf.reshape(y, y_b.get_shape())
+        return tf.concat((y, y_b), axis=3)
+      
+      
     def invert(self, z):    
         shape = int_shape(z)
         channels = shape[3]
         assert channels % 2 == 0 and shape[1] % 2 == 0 and shape[0] % 2 == 0
-        #z_1, z_2, z_3 = z[:, :(width//4)], z[:, (width//4):(width//2)], z[:, (width//2):]
         z_1, z_2 = split_along_channels(z)
-        print(z_1.get_shape())
-        print(z_2.get_shape())
         z_1 = tf.reshape(z_1, [shape[0], shape[1]//2, shape[2]//2, channels*2])
         x_1 = self.flow_3.invert(z_1)
         x_1 = self.squeeze.invert(x_1)
@@ -112,7 +118,7 @@ class ClassifierInv(ClassifierACN):
         x = self.flow_1.invert(x)
         x = self.squeeze.invert(x)
         return x
-        
+    
         
 class FlowstepBN(layers.Layer):
     def __init__(self, input_shape, ml=False, **kwargs):
