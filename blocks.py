@@ -6,7 +6,8 @@ Created on Tue May 28 21:38:15 2019
 
 Collection of blocks and classifiers:
     - FlowstepACN
-    - ClassifierACN
+    - ClassifierInv
+    - ClassifierBigInv
     - FlowstepBN
     - ClassifierBN
 
@@ -37,36 +38,12 @@ class FlowstepACN(layers.Layer):
         x = self.conv1x1.invert(x) 
         return self.actn.invert(x)
         
+               
         
 
-class ClassifierACN(tf.keras.Model):
+class ClassifierInv(tf.keras.Model):
     def __init__(self, label_classes, ml=False, **kwargs):
-        super(ClassifierACN, self).__init__(**kwargs)
-        self.squeeze = Squeeze()
-        self.flow_1 = FlowstepACN(ml)
-        self.flow_2 = FlowstepACN(ml)
-        self.split = split_along_channels
-        self.flow_3 = FlowstepACN(ml)
-        self.flat = layers.Flatten()
-        self.dense = layers.Dense(label_classes)
-          
-    def call(self, inputs):
-        y = self.squeeze(inputs)
-        y = self.flow_1(y)
-        y = self.flow_2(y)
-        y_a, _ = self.split(y)
-        y = self.squeeze(y_a)
-        y = self.flow_3(y)
-        y_aa, _ = self.split(y)
-        y = self.flat(y_aa)
-        y = self.dense(y)
-        return tf.nn.softmax(y)
-        
-        
-
-class ClassifierInv(ClassifierACN):
-    def __init__(self, label_classes, ml=False, **kwargs):
-        super(ClassifierInv, self).__init__(label_classes, ml=False, **kwargs)
+        super(ClassifierInv, self).__init__(**kwargs)
         self.squeeze = Squeeze()
         self.flow_1 = FlowstepACN(ml)
         self.flow_2 = FlowstepACN(ml)
@@ -119,7 +96,68 @@ class ClassifierInv(ClassifierACN):
         x = self.squeeze.invert(x)
         return x
     
+    
+class ClassifierBigInv(tf.keras.Model):
+    def __init__(self, label_classes, ml=False, **kwargs):
+        super(ClassifierBigInv, self).__init__(**kwargs)
+        self.squeeze = Squeeze()
+        self.flow_1 = FlowstepACN(ml)
+        self.flow_2 = FlowstepACN(ml)
+        self.flow_3 = FlowstepACN(ml)
+        self.split = split_along_channels
+        self.flow_4 = FlowstepACN(ml)
+        self.flow_5 = FlowstepACN(ml)
+        self.flow_6 = FlowstepACN(ml)
+        self.flat = layers.Flatten()
+        self.dense = layers.Dense(label_classes)
+          
+    def call(self, inputs):
+        y = self.squeeze(inputs)
+        y = self.flow_1(y)
+        y = self.flow_2(y)
+        y = self.flow_3(y)
+        y_a, _ = self.split(y)
+        y = self.squeeze(y_a)
+        y = self.flow_4(y)
+        y = self.flow_5(y)
+        y = self.flow_6(y)
+        y_aa, _ = self.split(y)
+        y = self.flat(y_aa)
+        y = self.dense(y)
+        return tf.nn.softmax(y)
         
+    def compute_z(self, inputs):
+        y = self.squeeze(inputs)
+        y = self.flow_1(y)
+        y = self.flow_2(y)
+        y = self.flow_3(y)
+        y_a, y_b = self.split(y)
+        y = self.squeeze(y_a)
+        y = self.flow_4(y)
+        y = self.flow_5(y)
+        y = self.flow_6(y)
+        y_aa, y_bb = self.split(y)
+        y = tf.concat((y_aa, y_bb), axis=3)
+        y = tf.reshape(y, y_b.get_shape())
+        return tf.concat((y, y_b), axis=3)
+          
+    def invert(self, z):    
+        shape = int_shape(z)
+        channels = shape[3]
+        assert channels % 2 == 0 and shape[1] % 2 == 0 and shape[0] % 2 == 0
+        z_1, z_2 = split_along_channels(z)
+        z_1 = tf.reshape(z_1, [shape[0], shape[1]//2, shape[2]//2, channels*2])
+        x_1 = self.flow_6.invert(z_1)
+        x_1 = self.flow_5.invert(x_1)
+        x_1 = self.flow_4.invert(x_1)
+        x_1 = self.squeeze.invert(x_1)
+        x = tf.concat((x_1, z_2), axis=3)
+        x = self.flow_3.invert(x)
+        x = self.flow_2.invert(x)
+        x = self.flow_1.invert(x)
+        x = self.squeeze.invert(x)
+        return x
+    
 class FlowstepBN(layers.Layer):
     def __init__(self, input_shape, ml=False, **kwargs):
         super(FlowstepBN, self).__init__(**kwargs)
