@@ -22,9 +22,9 @@ from helper import split_along_channels, int_shape
 
 
 class FlowstepACN(layers.Layer):
-    def __init__(self, ml=True, **kwargs):
+    def __init__(self, ml=True, data_init=None, **kwargs):
         super(FlowstepACN, self).__init__(**kwargs)
-        self.actn = Actnorm(ml)
+        self.actn = Actnorm(ml, data_init)
         self.conv1x1 = Conv1x1(ml)
         self.coupling = CouplingLayer2(ml)
                
@@ -41,13 +41,13 @@ class FlowstepACN(layers.Layer):
                
        
 class ClassifierInv(tf.keras.Model):
-    def __init__(self, label_classes, ml=False, **kwargs):
+    def __init__(self, label_classes, ml=False, data_init=None, **kwargs):
         super(ClassifierInv, self).__init__(**kwargs)
         self.squeeze = Squeeze()
-        self.flow_1 = FlowstepACN(ml)
-        self.flow_2 = FlowstepACN(ml)
+        self.flow_1 = FlowstepACN(ml, data_init)
+        self.flow_2 = FlowstepACN(ml, data_init)
         self.split = split_along_channels
-        self.flow_3 = FlowstepACN(ml)
+        self.flow_3 = FlowstepACN(ml, data_init)
         self.flat_first = layers.Flatten()
         self.flat_second = layers.Flatten()
         self.flat_last = layers.Flatten()
@@ -97,16 +97,16 @@ class ClassifierInv(tf.keras.Model):
     
     
 class ClassifierBigInv(tf.keras.Model):
-    def __init__(self, label_classes, ml=False, **kwargs):
+    def __init__(self, label_classes, ml=False, data_init=None, **kwargs):
         super(ClassifierBigInv, self).__init__(**kwargs)
         self.squeeze = Squeeze()
-        self.flow_1 = FlowstepACN(ml)
-        self.flow_2 = FlowstepACN(ml)
-        self.flow_3 = FlowstepACN(ml)
+        self.flow_1 = FlowstepACN(ml, data_init)
+        self.flow_2 = FlowstepACN(ml, data_init)
+        self.flow_3 = FlowstepACN(ml, data_init)
         self.split = split_along_channels
-        self.flow_4 = FlowstepACN(ml)
-        self.flow_5 = FlowstepACN(ml)
-        self.flow_6 = FlowstepACN(ml)
+        self.flow_4 = FlowstepACN(ml, data_init)
+        self.flow_5 = FlowstepACN(ml, data_init)
+        self.flow_6 = FlowstepACN(ml, data_init)
         self.flat = layers.Flatten()
         self.dense = layers.Dense(label_classes)
           

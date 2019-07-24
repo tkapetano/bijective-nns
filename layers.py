@@ -84,16 +84,16 @@ class Actnorm(layers.Layer):
     # Input shape: Arbitrary. 
     # Output shape: Same shape as input.
     """
-    def __init__(self, ml=True, data_depent_init=None, name='actnorm', **kwargs):
+    def __init__(self, ml=True, data_init=None, name='actnorm', **kwargs):
         super(Actnorm, self).__init__(name=name, **kwargs) #dynamic=True, **kwargs)
         self.ml = ml
-        self.data_depent_init = data_depent_init
+        self.data_init = data_init
  
         
     def build(self, input_shape):
         self.channels = int(input_shape[-1])
-        if self.data_depent_init:
-            scale_init, bias_init = self.data_depent_init()
+        if self.data_init:
+            scale_init, bias_init = self.data_init()
         else:
             scale_init, bias_init = 'random_normal', 'random_normal'
             
