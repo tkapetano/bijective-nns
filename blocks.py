@@ -39,8 +39,7 @@ class FlowstepACN(layers.Layer):
         return self.actn.invert(x)
         
                
-        
-
+       
 class ClassifierInv(tf.keras.Model):
     def __init__(self, label_classes, ml=False, **kwargs):
         super(ClassifierInv, self).__init__(**kwargs)
@@ -85,7 +84,7 @@ class ClassifierInv(tf.keras.Model):
     def invert(self, z):    
         shape = int_shape(z)
         channels = shape[3]
-        assert channels % 2 == 0 and shape[1] % 2 == 0 and shape[0] % 2 == 0
+        assert channels % 2 == 0 and shape[1] % 2 == 0 and shape[2] % 2 == 0
         z_1, z_2 = split_along_channels(z)
         z_1 = tf.reshape(z_1, [shape[0], shape[1]//2, shape[2]//2, channels*2])
         x_1 = self.flow_3.invert(z_1)
@@ -144,7 +143,7 @@ class ClassifierBigInv(tf.keras.Model):
     def invert(self, z):    
         shape = int_shape(z)
         channels = shape[3]
-        assert channels % 2 == 0 and shape[1] % 2 == 0 and shape[0] % 2 == 0
+        assert channels % 2 == 0 and shape[1] % 2 == 0 and shape[2] % 2 == 0
         z_1, z_2 = split_along_channels(z)
         z_1 = tf.reshape(z_1, [shape[0], shape[1]//2, shape[2]//2, channels*2])
         x_1 = self.flow_6.invert(z_1)
