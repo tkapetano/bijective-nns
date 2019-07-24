@@ -49,6 +49,31 @@ class Squeeze(tf.keras.layers.Layer):
         x = tf.transpose(x, [0, 1, 4, 2, 5, 3])
         x = tf.reshape(x, [-1, self.factor*h, self.factor*w, c//square])
         return x
+        
+class ACN_init(tf.keras.initializers.Initializer):
+  """Initializer that generates scale and bias tensors from a single data
+  batch, such that this batch has all ones and zeros in the activation layer."""
+  def __init__(self, batch, dtype='float32'):
+    self.batch = batch
+    self.dtype = dtype
+    self.channels = int_shape(batch)[-1]
+    
+
+  def __call__(self, shape=None, dtype=None, partition_info=None):
+    if dtype is None:
+      dtype = self.dtype
+    if shape is None:
+      shape = self.batch.get_shape()
+    scale = tf.math.reduce_std(self.batch, axis=(1,2,3))
+    print(scale)
+    bias = tf.math.reduce_mean(self.batch, axis=(1,2,3))
+    print(bias)
+    s = tf.reshape(scale, [int(shape[0]), 1, 1, self.channels])
+    b = tf.reshape(bias, [int(shape[0]), 1, 1, self.channels])
+    return 1./s, -b
+
+  def get_config(self):
+    return {"dtype": self.dtype.name}
 
 
 class Actnorm(layers.Layer):
@@ -68,16 +93,18 @@ class Actnorm(layers.Layer):
     def build(self, input_shape):
         self.channels = int(input_shape[-1])
         if self.data_depent_init:
-             scale_init, bias_init = self.data_depent_init()
+            scale_init, bias_init = self.data_depent_init()
         else:
             scale_init, bias_init = 'random_normal', 'random_normal'
             
-        self.scale = self.add_weight(shape=(self.channels,),
-                               initializer=scale_init,
-                               trainable=True)
-        self.bias = self.add_weight(shape=(self.channels,),
-                                initializer=bias_init,
-                                trainable=True)
+        self.scale = self.add_weight(name='scale',
+                                    shape=(self.channels,),
+                                    initializer=scale_init,
+                                    trainable=True)
+        self.bias = self.add_weight(name='bias',
+                                    shape=(self.channels,),
+                                    initializer=bias_init,
+                                    trainable=True)
                                                
     def call(self, inputs):
         dims = int_shape(inputs)
@@ -124,9 +151,10 @@ class Conv1x1(layers.Layer):
         
     def build(self, input_shape):
         self.channels = int(input_shape[-1])
-        self.w = self.add_weight(shape=(self.channels, self.channels),
-                               initializer='orthogonal',
-                               trainable=True)
+        self.w = self.add_weight(name='w',
+                                 shape=(self.channels, self.channels),
+                                 initializer='orthogonal',
+                                 trainable=True)
                                                
     def call(self, inputs):
         if self.ml:
@@ -173,14 +201,17 @@ class CouplingLayer2(layers.Layer):
         channels = int(input_shape[-1])
         self.conv1 = layers.Conv2D(channels, 
                                    width, 
+                                   name='conv1',
                                    padding='same', 
                                    activation='relu')
         self.conv2 = layers.Conv2D(channels, 
                                    width, 
+                                   name='conv2',
                                    padding='same', 
                                    activation='relu')
         self.conv3 = layers.Conv2D(channels, 
                                    width, 
+                                   name='conv3',
                                    padding='same', 
                                    kernel_initializer='zeros')
                                                
