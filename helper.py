@@ -7,7 +7,7 @@ Created on Tue May 28 22:02:31 2019
 Collection of helper functions:
     - int_shape
     - split_along_channels
-    - act_init*
+    - act_init
     - preprocess
     - postprocess
     - sampleplot*
@@ -39,19 +39,57 @@ def split_along_channels(inputs):
     # split along channels
     c_half = channels // 2
     return inputs[:, :, :, :c_half], inputs[:, :, :, c_half:]
+
     
-def actn_init(batch):
-    #TODO: Implement data-dependent initializer
-    #dims = int_shape(batch)
-    def scale_init(shape, dtype=None):
-        return tf.keras.backend.random_normal(shape, dtype=dtype)
+class Scale_init(tf.keras.initializers.Initializer):
+  """Initializer that generates scale and bias tensors from a single data
+  batch, such that this batch has all ones and zeros in the activation layer."""
+  def __init__(self, scale):
+    self.scale = scale
     
-    def bias_init(shape, dtype=None):
-        return tf.keras.backend.random_normal(shape, dtype=dtype)
-        
-    #s = tf.reshape(self.scale, [dims[0], 1, 1, dims[3]])
-    #b = tf.reshape(self.bias, [dims[0], 1, 1, dims[3]])
-    return scale_init, bias_init
+  def __call__(self, shape=None, dtype=None, partition_info=None):
+    return tf.math.reciprocal(self.scale)
+
+
+class Bias_init(tf.keras.initializers.Initializer):
+  """Initializer that generates scale and bias tensors from a single data
+  batch, such that this batch has all ones and zeros in the activation layer."""
+  def __init__(self, bias):
+      self.bias = bias
+
+  def __call__(self, shape=None, dtype=None, partition_info=None):
+    return -self.bias
+
+batch = train_images[0:32]
+
+def init(model, batch):
+    initializer = []
+#    for var in model.trainable_variables:
+#        if 'actnorm' in var.name:
+#            shape = var.shape
+#            val = var.numpy()
+#            Bias
+    layers = model.layers
+    squeeze = layers[0]
+    squeeze_out = squeeze(batch)
+    shape = int_shape(squeeze_out)
+    
+    scale = tf.math.reduce_std(squeeze_out, axis=(0,1,2))
+    scale = tf.reshape(scale, shape[1:4])
+    bias = tf.math.reduce_mean(squeeze_out, axis=(0,1,2))
+    bias = tf.reshape(bias, shape[1:4])
+    
+    initializer.append((Scale_init(scale), Bias_init(bias)))
+    t_1 = Scale_init(scale)
+    t_2 = Bias_init(bias)
+    s, b = t_1(), t_2()
+    print(s)
+    print(b)
+    flow = layers[1]
+    
+    
+    return 
+
 
 def preprocess(train_data, discrete_vals=256):
     """Maps discrete data to floats in interval [0,1]"""
@@ -80,3 +118,31 @@ def invertability(model, img):
     img_reconstruct = model.invert(z)
     dist = np.linalg.norm(img - img_reconstruct)
     print(dist)
+    
+    
+#==============================================================================
+#     class Scale_init(tf.keras.initializers.Initializer):
+#   """Initializer that generates scale and bias tensors from a single data
+#   batch, such that this batch has all ones and zeros in the activation layer."""
+#   def __init__(self, scale):
+#     self.scale = scale
+#     
+#   def __call__(self, shape=None, dtype=None, partition_info=None):
+#     scale = tf.math.reduce_std(self.batch, axis=(0,1,2))
+#     s = tf.reshape(scale, [1, 1, self.channels])
+#     return tf.math.reciprocal(s)
+# 
+# 
+# class Bias_init(tf.keras.initializers.Initializer):
+#   """Initializer that generates scale and bias tensors from a single data
+#   batch, such that this batch has all ones and zeros in the activation layer."""
+#   def __init__(self, batch):
+#     self.batch = batch
+#     self.channels = int_shape(batch)[-1]
+#     
+# 
+#   def __call__(self, shape=None, dtype=None, partition_info=None):
+#     bias = tf.math.reduce_mean(self.batch, axis=(0,1,2))
+#     b = tf.reshape(bias, [1, 1, self.channels])
+#     return -b
+#==============================================================================

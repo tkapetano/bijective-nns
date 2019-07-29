@@ -8,7 +8,7 @@ Created on Tue May 28 21:47:15 2019
 from __future__ import absolute_import, division, print_function, unicode_literals
 import tensorflow as tf
 import numpy as np
-from blocks import FlowstepACN, ClassifierACN
+from blocks import FlowstepACN, ClassifierACN, ClassifierInv
 from layers import Squeeze
 from helper import int_shape
 
@@ -23,6 +23,7 @@ class TestCaseBlocks(unittest.TestCase):
         self.squeeze = Squeeze()
         self.flow = FlowstepACN(ml)
         self.classify = ClassifierACN(10, ml=False)
+        self.classifyInv = ClassifierInv(10, ml=False)
     
         self.dist = lambda x, x_approx: np.linalg.norm(x - x_approx)
         
@@ -35,6 +36,12 @@ class TestCaseBlocks(unittest.TestCase):
         inputs = tf.ones([4, 4, 4, 1])
         outputs = self.classify(inputs)
         self.assertEqual((4, 10) , outputs.get_shape())
+        
+        inputs = tf.ones([4, 4, 4, 1])
+        outputs = self.classifyInv(inputs)
+        self.assertEqual((4, 1, 1, 4) , outputs.get_shape())
+        
+        
         
          
     def testLosses(self):
