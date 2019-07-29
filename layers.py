@@ -12,7 +12,6 @@ Collection of invertable layer architectures:
 """
 
 
-
 from __future__ import absolute_import, division, print_function, unicode_literals
 import tensorflow as tf
 from tensorflow.keras import layers
@@ -112,9 +111,9 @@ class Actnorm(layers.Layer):
         
     def get_config(self):
         config = {
-            'act_scale': self.scale,
-            'act_bias': self.bias,
-            'act_channels': self.channels
+            'scale': self.scale,
+            'bias': self.bias,
+            'channels': self.channels
         }
         base_config = super(Actnorm, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
@@ -156,8 +155,8 @@ class Conv1x1(layers.Layer):
         
     def get_config(self):
         config = {
-            'conv1x1_w': self.w,
-            'conv1x1_channels': self.channels
+            'w': self.w,
+            'channels': self.channels
         }
         base_config = super(Conv1x1, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
@@ -230,7 +229,9 @@ class CouplingLayer2(layers.Layer):
         return tf.concat([y_a,x_b], 3)
         
     def get_config(self):
-        config = {
+        config = {"conv1": self.conv1,
+                  "conv2": self.conv2,
+                  "conv3": self.conv3
         }
         base_config = super(CouplingLayer2, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))

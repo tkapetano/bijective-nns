@@ -60,14 +60,13 @@ class Bias_init(tf.keras.initializers.Initializer):
   def __call__(self, shape=None, dtype=None, partition_info=None):
     return self.bias
 
-
+#TODO generalize to all architectures
 def data_init_acn(model, batch):
     initializer = []
 #    for var in model.trainable_variables:
 #        if 'actnorm' in var.name:
 #            shape = var.shape
 #            val = var.numpy()
-#            Bias
     layers = model.layers
     squeeze = layers[0]
     squeeze_out = squeeze(batch)
@@ -85,6 +84,21 @@ def data_init_acn(model, batch):
     t_1 = Scale_init(scale)
     t_2 = Bias_init(bias)
     return [(t_1, t_2)]
+
+#TODO Fix this draft    
+def reinstantiate_with_data_init(ModelClass, ml, batch):
+    model = ModelClass(ml)
+    list_of_inits = data_init_acn(model, batch)
+    weight_list = []
+
+    for layer in model.layers:
+        weight_list.append(layer.get_weights())
+    model_reinst = ModelClass(ml, data_init=list_of_inits[0])
+    
+    for i in weight_list:
+         model_reinst.layer[i].set_weights = weight_list[i]
+    
+    return model_reinst
 
 
 def preprocess(train_data, discrete_vals=256):
@@ -115,30 +129,3 @@ def invertability(model, img):
     dist = np.linalg.norm(img - img_reconstruct)
     print(dist)
     
-    
-#==============================================================================
-#     class Scale_init(tf.keras.initializers.Initializer):
-#   """Initializer that generates scale and bias tensors from a single data
-#   batch, such that this batch has all ones and zeros in the activation layer."""
-#   def __init__(self, scale):
-#     self.scale = scale
-#     
-#   def __call__(self, shape=None, dtype=None, partition_info=None):
-#     scale = tf.math.reduce_std(self.batch, axis=(0,1,2))
-#     s = tf.reshape(scale, [1, 1, self.channels])
-#     return tf.math.reciprocal(s)
-# 
-# 
-# class Bias_init(tf.keras.initializers.Initializer):
-#   """Initializer that generates scale and bias tensors from a single data
-#   batch, such that this batch has all ones and zeros in the activation layer."""
-#   def __init__(self, batch):
-#     self.batch = batch
-#     self.channels = int_shape(batch)[-1]
-#     
-# 
-#   def __call__(self, shape=None, dtype=None, partition_info=None):
-#     bias = tf.math.reduce_mean(self.batch, axis=(0,1,2))
-#     b = tf.reshape(bias, [1, 1, self.channels])
-#     return -b
-#==============================================================================

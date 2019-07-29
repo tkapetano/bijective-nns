@@ -9,38 +9,26 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 import tensorflow as tf
 import numpy as np
 from layers import Squeeze, Actnorm, Conv1x1, CouplingLayer2
-from helper import int_shape, split_along_channels, Scale_init, Bias_init
+from helper import int_shape, split_along_channels
 
 import unittest
 
 class TestCaseLayers(unittest.TestCase):
     """
-    Testing individual layers of the module 'layers.py' and the acnnorm inits
+    Testing individual layers of the module 'layers.py'. 
     """
     def setUp(self):
         ml = True # the most general setting
         self.squeeze = Squeeze()
-                
-        #batch = tf.ones((8,2,2,3))
-        self.gaussians = tf.random.normal((8,2,2,3))        
-        self.scale_init = Scale_init(self.gaussians)
-        self.bias_init = Bias_init(self.gaussians)
-        self.actn = Actnorm(ml, (self.scale_init, self.bias_init))
-        
+        self.actn = Actnorm(ml)        
         self.conv1x1 = Conv1x1(ml)
         self.coupling = CouplingLayer2(ml)
         
         self.dist = lambda x, x_approx: np.linalg.norm(x - x_approx)
     
-    
-        
         
     def testShapes(self):
-        # positive
-        s, b = self.scale_init(), self.bias_init()
-        self.assertEqual([1,1,3], s.shape)
-        self.assertEqual([1,1,3], b.shape)    
-    
+        # positive    
         inputs = tf.ones([4, 2, 2, 3])
         squeezed = self.squeeze(inputs)
         self.assertEqual([4,1,1,12], int_shape(squeezed))
@@ -50,9 +38,6 @@ class TestCaseLayers(unittest.TestCase):
         actnormed = self.actn(inputs)
         self.assertEqual([4,2,2,3], int_shape(actnormed))
         
-        s, b = self.scale_init(), self.bias_init()
-        self.assertEqual((1,1,3), s.shape)
-        self.assertEqual((1,1,3), b.shape)
         
         convolved = self.conv1x1(inputs)
         self.assertEqual([4,2,2,3], int_shape(convolved))
@@ -94,12 +79,9 @@ class TestCaseLayers(unittest.TestCase):
         coupled = self.coupling(squeezed)
         decoupled = self.coupling.invert(coupled)
         self.assertLessEqual(self.dist(squeezed, decoupled), 1e-5)
+    
         
-def testInits(self):    
-        # probabilistic test
-        s, b = self.scale_init(), self.bias_init()
-        self.assertLessEqual(self.dist(s, tf.ones(s.shape)), 2)   
-        self.assertLessEqual(self.dist(b, tf.ones(b.shape)), 2.5)   
+    
         
 #TODO: test Losses 
 #    def testLosses(self):

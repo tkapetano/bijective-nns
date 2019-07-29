@@ -35,13 +35,14 @@ class TestCaseHelper(unittest.TestCase):
         out_1, out_2 = split_along_channels(inputs)
         self.assertEqual(out_1.shape, out_2.shape)
         self.assertEqual((2,2,2,2), out_1.shape)
+        
+        list_of_inits = data_init_acn(self.flowSqueeze, self.gaussians)
+        
+        s, b = list_of_inits[0][0], list_of_inits[0][1]
+        self.assertEqual([1,1,12], s.shape)
+        self.assertEqual([1,1,12], b.shape)    
 
-#TODO:        
-#        scale_init, bias_init = actn_init(inputs)
-#        s_init = scale_init(inputs.shape)
-#        b_init = bias_init(inputs.shape)
-#        print(s_init)
-#        print(b_init)
+
         
     def testDataInitACN(self):
         #batch = tf.ones([7, 4, 4, 3])
