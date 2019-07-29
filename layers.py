@@ -64,6 +64,8 @@ class Actnorm(layers.Layer):
         super(Actnorm, self).__init__(name=name, **kwargs)
         self.ml = ml
         self.data_init = data_init
+        self.bias = None
+        self.scale = None
  
         
     def build(self, input_shape):
@@ -97,7 +99,7 @@ class Actnorm(layers.Layer):
         #b = self.bias#tf.reshape(self.bias, [1, 1, self.channels])
         #print(s)
         #print(b)
-        return tf.matmul(inputs, self.scale) + self.bias
+        return inputs * self.scale + self.bias
         
         
     def invert(self, outputs):

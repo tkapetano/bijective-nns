@@ -8,7 +8,7 @@ Created on Tue May 28 21:47:15 2019
 from __future__ import absolute_import, division, print_function, unicode_literals
 import tensorflow as tf
 import numpy as np
-from blocks import FlowstepACN, ClassifierACN, ClassifierInv
+from blocks import FlowstepACN, ClassifierACN, ClassifierInv, FlowstepSqueeze
 from layers import Squeeze
 from helper import int_shape
 
@@ -22,6 +22,7 @@ class TestCaseBlocks(unittest.TestCase):
         ml = True # the most general setting
         self.squeeze = Squeeze()
         self.flow = FlowstepACN(ml)
+        self.flowSqueeze = FlowstepSqueeze(ml=False)
         self.classify = ClassifierACN(10, ml=False)
         self.classifyInv = ClassifierInv(10, ml=False)
     

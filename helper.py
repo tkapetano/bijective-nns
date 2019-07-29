@@ -48,7 +48,7 @@ class Scale_init(tf.keras.initializers.Initializer):
     self.scale = scale
     
   def __call__(self, shape=None, dtype=None, partition_info=None):
-    return tf.math.reciprocal(self.scale)
+    return self.scale
 
 
 class Bias_init(tf.keras.initializers.Initializer):
@@ -58,11 +58,10 @@ class Bias_init(tf.keras.initializers.Initializer):
       self.bias = bias
 
   def __call__(self, shape=None, dtype=None, partition_info=None):
-    return -self.bias
+    return self.bias
 
-batch = train_images[0:32]
 
-def init(model, batch):
+def data_init_acn(model, batch):
     initializer = []
 #    for var in model.trainable_variables:
 #        if 'actnorm' in var.name:
@@ -73,22 +72,19 @@ def init(model, batch):
     squeeze = layers[0]
     squeeze_out = squeeze(batch)
     shape = int_shape(squeeze_out)
+    print(shape)
     
     scale = tf.math.reduce_std(squeeze_out, axis=(0,1,2))
-    scale = tf.reshape(scale, shape[1:4])
+    scale = tf.reshape(scale, [1, 1, shape[3]])
+    scale = tf.math.reciprocal(scale)
     bias = tf.math.reduce_mean(squeeze_out, axis=(0,1,2))
-    bias = tf.reshape(bias, shape[1:4])
+    bias = tf.reshape(bias, [1, 1, shape[3]])
+    bias = -bias * scale 
     
     initializer.append((Scale_init(scale), Bias_init(bias)))
     t_1 = Scale_init(scale)
     t_2 = Bias_init(bias)
-    s, b = t_1(), t_2()
-    print(s)
-    print(b)
-    flow = layers[1]
-    
-    
-    return 
+    return [(t_1, t_2)]
 
 
 def preprocess(train_data, discrete_vals=256):

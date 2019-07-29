@@ -38,7 +38,26 @@ class FlowstepACN(layers.Layer):
         x = self.conv1x1.invert(x) 
         return self.actn.invert(x)
         
+       
+class FlowstepSqueeze(tf.keras.Model):
+    def __init__(self, ml=True, data_init=None, **kwargs):
+        super(FlowstepSqueeze, self).__init__(**kwargs)
+        self.squeeze = Squeeze()
+        self.actn = Actnorm(ml, data_init)
+        self.conv1x1 = Conv1x1(ml)
+        self.coupling = CouplingLayer2(ml)
                
+    def call(self, inputs):
+        y = self.squeeze(inputs)
+        y = self.actn(y)
+        y = self.conv1x1(y)
+        return self.coupling(y)
+        
+    def invert(self, outputs):
+        x = self.squeeze.invert(outputs)
+        x = self.coupling.invert(x)
+        x = self.conv1x1.invert(x) 
+        return self.actn.invert(x)        
        
 class ClassifierInv(tf.keras.Model):
     def __init__(self, label_classes, ml=False, data_init=None, **kwargs):
