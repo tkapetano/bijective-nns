@@ -175,12 +175,12 @@ class CouplingLayer2(layers.Layer):
     def build(self, input_shape):        
         width = 2
         channels = int(input_shape[-1])
-        self.conv1 = layers.Conv2D(channels, 
+        self.conv1 = layers.Conv2D(128, 
                                    width, 
                                    name='conv1',
                                    padding='same', 
                                    activation='relu')
-        self.conv2 = layers.Conv2D(channels, 
+        self.conv2 = layers.Conv2D(128, 
                                    width, 
                                    name='conv2',
                                    padding='same', 
