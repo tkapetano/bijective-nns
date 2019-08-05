@@ -39,13 +39,12 @@ class TestCaseHelper(unittest.TestCase):
         list_of_inits = data_init_acn(self.flowSqueeze, self.gaussians)
         
         s, b = list_of_inits[0][0], list_of_inits[0][1]
-        self.assertEqual([1,1,12], s.shape)
-        self.assertEqual([1,1,12], b.shape)    
+        self.assertEqual([1,1,12], s().shape)
+        self.assertEqual([1,1,12], b().shape)    
 
 
         
     def testDataInitACN(self):
-        #batch = tf.ones([7, 4, 4, 3])
         list_of_inits = data_init_acn(self.flowSqueeze, self.gaussians)
         # now new init of the Flow block
         model_inited = FlowstepSqueeze(ml=False, data_init=list_of_inits[0])
@@ -57,6 +56,7 @@ class TestCaseHelper(unittest.TestCase):
         squeeze_layer = layers[0]
         flow_layer = layers[1]
         flow_output = flow_layer(squeeze_layer(self.gaussians))
+        
         stddev = tf.ones((12,))
         mean = tf.zeros((12,))
         post_stddev = tf.math.reduce_std(flow_output, axis=(0,1,2))

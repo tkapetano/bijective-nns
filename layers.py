@@ -73,7 +73,7 @@ class Actnorm(layers.Layer):
             scale_init, bias_init = self.data_init
             
         else:
-            scale_init, bias_init = 'random_normal', 'random_normal'
+            scale_init, bias_init = 'ones', 'zeros'
             
         self.scale = self.add_weight(name='scale',
                                     shape=(1, 1, self.channels),
@@ -94,10 +94,6 @@ class Actnorm(layers.Layer):
             #print('this is actnorm:' + str(log_det))
             self.add_loss(log_det)
         # forward pass - channelwise ops
-        #s = self.scale#tf.reshape(self.scale, [1, 1, self.channels])
-        #b = self.bias#tf.reshape(self.bias, [1, 1, self.channels])
-        #print(s)
-        #print(b)
         return inputs * self.scale + self.bias
         
         

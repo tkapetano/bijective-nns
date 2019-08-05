@@ -60,46 +60,65 @@ class Bias_init(tf.keras.initializers.Initializer):
   def __call__(self, shape=None, dtype=None, partition_info=None):
     return self.bias
 
-#TODO generalize to all architectures
-def data_init_acn(model, batch):
-    initializer = []
-#    for var in model.trainable_variables:
-#        if 'actnorm' in var.name:
-#            shape = var.shape
-#            val = var.numpy()
-    layers = model.layers
-    squeeze = layers[0]
-    squeeze_out = squeeze(batch)
-    shape = int_shape(squeeze_out)
-    print(shape)
-    
-    scale = tf.math.reduce_std(squeeze_out, axis=(0,1,2))
-    scale = tf.reshape(scale, [1, 1, shape[3]])
-    scale = tf.math.reciprocal(scale)
-    bias = tf.math.reduce_mean(squeeze_out, axis=(0,1,2))
-    bias = tf.reshape(bias, [1, 1, shape[3]])
-    bias = -bias * scale 
-    
-    initializer.append((Scale_init(scale), Bias_init(bias)))
-    t_1 = Scale_init(scale)
-    t_2 = Bias_init(bias)
-    return [(t_1, t_2)]
 
-#TODO Fix this draft    
-def reinstantiate_with_data_init(ModelClass, ml, batch):
-    model = ModelClass(ml)
+def data_init_acn(model, batch):
+    initializers = []
+    current_activations = batch
+    layers = model.layers
+    current_layer = 0
+    
+    while not('flatten' in layers[current_layer].name):
+      if 'acn' in layers[current_layer].name:
+          out_vals = current_activations
+      elif 'squeeze' in layers[current_layer].name:
+          squeeze = layers[current_layer]
+          out_vals = squeeze(current_activations)
+          current_layer += 1
+
+      # normalize
+      shape = int_shape(out_vals)
+      scale = tf.math.reduce_std(out_vals, axis=(0,1,2))
+      scale = tf.reshape(scale, [1, 1, shape[3]])
+      scale = tf.math.reciprocal(scale)
+      bias = tf.math.reduce_mean(out_vals, axis=(0,1,2))
+      bias = tf.reshape(bias, [1, 1, shape[3]])
+      bias = -bias * scale 
+      # add to list  
+      initializers.append((Scale_init(scale), Bias_init(bias)))
+
+      current_activations = layers[current_layer](out_vals)
+      current_layer += 1
+ 
+    return initializers 
+
+ 
+def reinstantiate_with_data_init(ModelClass, label_num, ml, batch):
+    model = ModelClass(label_num, ml)
     list_of_inits = data_init_acn(model, batch)
     weight_list = []
+    acn_count = 0
 
     for layer in model.layers:
-        weight_list.append(layer.get_weights())
-    model_reinst = ModelClass(ml, data_init=list_of_inits[0])
+      if layer.trainable_variables:
+        weights = layer.get_weights()
+        if 'acn' in layer.name:
+          weights[0] = list_of_inits[acn_count][0]()
+          weights[1] = list_of_inits[acn_count][1]()
+          acn_count += 1
+
+        weight_list.append(weights)
+        #print(weight_list)
+      else:
+        weight_list.append(0)
+    model_reinst = ModelClass(label_num, ml)
     
-    for i in weight_list:
-         model_reinst.layer[i].set_weights = weight_list[i]
+    for i in range(len(weight_list)):
+       if model_reinst.layers[i].trainable_variables:
+          model_reinst.layers[i].set_weights(weight_list[i])
     
     return model_reinst
 
+    
 
 def preprocess(train_data, discrete_vals=256):
     """Maps discrete data to floats in interval [0,1]"""
