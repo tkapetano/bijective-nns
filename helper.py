@@ -7,11 +7,10 @@ Created on Tue May 28 22:02:31 2019
 Collection of helper functions:
     - int_shape
     - split_along_channels
-    - act_init
+    - reinstantiate_with_data_init
     - preprocess
     - postprocess
-    - sampleplot*
-    - invertability*
+    - sampleplot
 """
 
 from __future__ import absolute_import, division, print_function, unicode_literals
@@ -42,8 +41,6 @@ def split_along_channels(inputs):
 
     
 class Scale_init(tf.keras.initializers.Initializer):
-  """Initializer that generates scale and bias tensors from a single data
-  batch, such that this batch has all ones and zeros in the activation layer."""
   def __init__(self, scale):
     self.scale = scale
     
@@ -52,8 +49,6 @@ class Scale_init(tf.keras.initializers.Initializer):
 
 
 class Bias_init(tf.keras.initializers.Initializer):
-  """Initializer that generates scale and bias tensors from a single data
-  batch, such that this batch has all ones and zeros in the activation layer."""
   def __init__(self, bias):
       self.bias = bias
 
@@ -61,7 +56,10 @@ class Bias_init(tf.keras.initializers.Initializer):
     return self.bias
 
 
-def data_init_acn(model, batch):
+def _data_init_acn(model, batch):
+    """Generates a list of Initializer pairs (scale, bias) from a single data
+    batch, such that on this batch the effective activations of each ACN layer
+    after being initialized with this list have mean 0 and stddev 1."""
     initializers = []
     current_activations = batch
     layers = model.layers
@@ -92,9 +90,9 @@ def data_init_acn(model, batch):
     return initializers 
 
  
-def reinstantiate_with_data_init(ModelClass, label_num, ml, batch):
+def reinstantiate_with_data_init(ModelClass, label_num, batch, ml=False):
     model = ModelClass(label_num, ml)
-    list_of_inits = data_init_acn(model, batch)
+    list_of_inits = _data_init_acn(model, batch)
     weight_list = []
     acn_count = 0
 
@@ -119,7 +117,6 @@ def reinstantiate_with_data_init(ModelClass, label_num, ml, batch):
     return model_reinst
 
     
-
 def preprocess(train_data, discrete_vals=256):
     """Maps discrete data to floats in interval [0,1]"""
     x = tf.cast(train_data, 'float32')
@@ -132,19 +129,10 @@ def postprocess(z, discrete_vals=256):
     return tf.cast(tf.clip_by_value(tf.floor(z*discrete_vals), 0, discrete_vals-1), 'uint8')
     
 
-def sampleplot(img, dims):
-    img = tf.reshape(img, dims).numpy()
-    img = postprocess(img)
+def sampleplot(img):
     plt.figure()
     plt.imshow(img)
     plt.colorbar()
     plt.grid(False)
     plt.show()
-
-
-def invertability(model, img):
-    z = model(img)
-    img_reconstruct = model.invert(z)
-    dist = np.linalg.norm(img - img_reconstruct)
-    print(dist)
-    
+   
