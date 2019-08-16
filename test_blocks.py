@@ -8,7 +8,7 @@ Created on Tue May 28 21:47:15 2019
 from __future__ import absolute_import, division, print_function, unicode_literals
 import tensorflow as tf
 import numpy as np
-from blocks import FlowstepACN, ClassifierInv, FlowstepSqueeze
+from blocks import FlowstepACN, ClassifierInv, FlowstepSqueeze, ClassifierBigInv
 from layers import Squeeze
 from helper import int_shape
 
@@ -22,8 +22,9 @@ class TestCaseBlocks(unittest.TestCase):
         ml = True # the most general setting
         self.squeeze = Squeeze()
         self.flow = FlowstepACN(ml)
-        self.flowSqueeze = FlowstepSqueeze(ml=False)
-        self.classifyInv = ClassifierInv(10, ml=False)
+        self.flowSqueeze = FlowstepSqueeze(ml)
+        self.classifyInv = ClassifierInv(10, ml)
+        self.classifyBigInv = ClassifierBigInv(10, ml)
     
         self.dist = lambda x, x_approx: np.linalg.norm(x - x_approx)
         
@@ -35,6 +36,10 @@ class TestCaseBlocks(unittest.TestCase):
         
         inputs = tf.ones([4, 4, 4, 1])
         outputs = self.classifyInv(inputs)
+        self.assertEqual((4, 10) , outputs.get_shape())
+        
+        inputs = tf.ones([4, 4, 4, 1])
+        outputs = self.classifyBigInv(inputs)
         self.assertEqual((4, 10) , outputs.get_shape())
                
         
@@ -53,6 +58,11 @@ class TestCaseBlocks(unittest.TestCase):
         flowacn = self.flow(inputs)
         recon_flowacn = self.flow.invert(flowacn)
         self.assertLessEqual(self.dist(inputs, recon_flowacn), 1e-5)
+        
+        inputs = tf.ones([4, 8, 8, 2])
+        z_vec = self.classifyBigInv.compute_z(inputs)
+        recon_input = self.classifyBigInv.invert(z_vec)
+        self.assertLessEqual(self.dist(inputs, recon_input), 1e-4)
    
       
         

@@ -78,7 +78,7 @@ class ClassifierInv(tf.keras.Model):
         y = self.squeeze(y_a)
         y = self.flow_3(y)
         y_aa, y_bb = self.split(y)
-        y = self.flat_last(y_aa)
+        y = self.flat(y_aa)
         y = self.dense(y)
         return tf.nn.softmax(y)
         
