@@ -130,6 +130,8 @@ def postprocess(z, discrete_vals=256):
     
 
 def sampleplot(img):
+    shape = img.get_shape()
+    img = tf.reshape(img, [int(shape[0]), int(shape[1])])
     plt.figure()
     plt.imshow(img)
     plt.colorbar()
