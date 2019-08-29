@@ -15,7 +15,7 @@ Collection of invertable layer architectures:
 from __future__ import absolute_import, division, print_function, unicode_literals
 import tensorflow as tf
 from tensorflow.keras import layers
-from helper import int_shape, split_along_channels
+from helper import int_shape, split_along_channels, Gaussian_isotrop
 
 class Squeeze(tf.keras.layers.Layer):
     """Squeeze layer (Shi et. al. 2016).
@@ -49,8 +49,6 @@ class Squeeze(tf.keras.layers.Layer):
         x = tf.reshape(x, [-1, self.factor*h, self.factor*w, c//square])
         return x
     
-
-
 class Actnorm(layers.Layer):
     """Activation normalization layer (Kingma and Dhariwal, 2018).
     Use a affine transformation to standardize mean and variance
@@ -90,7 +88,7 @@ class Actnorm(layers.Layer):
         dims = int_shape(inputs)
         if self.ml: 
             # add loss for max likelihood term
-            log_det = - dims[1] * dims[2] * tf.reduce_sum(tf.math.log(tf.math.abs(self.scale)))
+            log_det =  dims[1] * dims[2] * tf.reduce_sum(tf.math.log(tf.math.abs(self.scale)))
             #print('this is actnorm:' + str(log_det))
             self.add_loss(log_det)
         # forward pass - channelwise ops
@@ -136,7 +134,7 @@ class Conv1x1(layers.Layer):
         if self.ml:
             # add loss for max likelihood term
             w, h = float(inputs.shape[1]), float(inputs.shape[2])
-            log_det = -w * h * tf.math.log(tf.math.abs(tf.linalg.det(self.w)))
+            log_det = w * h * tf.math.log(tf.math.abs(tf.linalg.det(self.w)))
             #print('this is 1x1conv ' + str(log_det))
             self.add_loss(log_det)
         # forward pass
@@ -167,7 +165,7 @@ class CouplingLayer2(layers.Layer):
             some permuation of the channels preceeding this layer, e.g. 1x1 Convolution
     # Output shape: Same shape as input.
     """
-    def __init__(self, ml=True, name='conv1x1', **kwargs):
+    def __init__(self, ml=True, name='coupling', **kwargs):
         super(CouplingLayer2, self).__init__(name=name, **kwargs)
         self.ml = ml
         
@@ -201,7 +199,7 @@ class CouplingLayer2(layers.Layer):
         if self.ml:
             # add loss for max likelihood term
             #log_det = tf.reduce_sum(tf.reduce_sum(s, axis=[1,2,3])).numpy()
-            log_det = -sum(tf.reduce_sum(s, axis=[1,2,3]))
+            log_det = tf.reduce_sum(s, axis=[1,2,3])
             #print('this is coupling ' + str(log_det))
             self.add_loss(log_det)
         # forward pass
@@ -232,4 +230,61 @@ class CouplingLayer2(layers.Layer):
         base_config = super(CouplingLayer2, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
         
- 
+class SplitLayer(layers.Layer):
+    """Affine Coupling layer (Dinh, Krueger, Bengio 2015).
+    A generalized permutation of channels as preparation for a coupling layer
+    # Arguments
+        nn: A shallow neural network. In- and output shape need to be equal.
+    # Input shape:  Needs to have an even number of channels. Recommended to have 
+            some permuation of the channels preceeding this layer, e.g. 1x1 Convolution
+    # Output shape: Same shape as input.
+    """
+    def __init__(self, ml=True, name='split', **kwargs):
+        super(SplitLayer, self).__init__(name=name, **kwargs)
+        self.ml = ml
+        
+        
+    def build(self, input_shape):        
+        width = 2
+        channels = int(input_shape[-1])
+        self.conv = layers.Conv2D(2*channels, 
+                                   width, 
+                                   name='conv',
+                                   padding='same', 
+                                   kernel_initializer='zeros')
+                                               
+    def call(self, inputs):
+        x_a, x_b = split_along_channels(inputs)
+        # apply the neural net to first partition component to get scaling 
+        # and translation parameters
+        h = self.conv(x_a)
+        mean = h[:, :, :, 0::2]
+        log_var = h[:, :, :, 1::2]
+        gauss = Gaussian_isotrop(mean, log_var)
+        if self.ml:
+            # add loss for max likelihood term
+            log_det = gauss.logp(x_b)
+            #log_det = tf.reduce_sum(s, axis=[1,2,3])
+            #print('this is coupling ' + str(log_det))
+            self.add_loss(log_det)
+        # forward pass
+        return x_a, gauss.eps_recon(x_b)
+        
+        
+    def invert(self, outputs, eps):
+        # split along channels
+        y_a = outputs
+        # apply nn
+        h = self.conv(y_a)
+        mean = h[:, :, :, 0::2]
+        log_var = h[:, :, :, 1::2]
+        gauss = Gaussian_isotrop(mean, log_var)
+        y_b = gauss.sample(eps)
+        return tf.concat([y_a, y_b], 3)
+        
+    def get_config(self):
+        config = {"conv": self.conv,
+        }
+        base_config = super(SplitLayer, self).get_config()
+        return dict(list(base_config.items()) + list(config.items()))
+        

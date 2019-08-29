@@ -8,7 +8,7 @@ Created on Tue May 28 21:47:15 2019
 from __future__ import absolute_import, division, print_function, unicode_literals
 import tensorflow as tf
 import numpy as np
-from layers import Squeeze, Actnorm, Conv1x1, CouplingLayer2
+from layers import Squeeze, Actnorm, Conv1x1, CouplingLayer2, SplitLayer
 from helper import int_shape, split_along_channels
 
 import unittest
@@ -23,6 +23,7 @@ class TestCaseLayers(unittest.TestCase):
         self.actn = Actnorm(ml)        
         self.conv1x1 = Conv1x1(ml)
         self.coupling = CouplingLayer2(ml)
+        self.split = SplitLayer(ml)
         
         self.dist = lambda x, x_approx: np.linalg.norm(x - x_approx)
     
@@ -37,8 +38,7 @@ class TestCaseLayers(unittest.TestCase):
         
         actnormed = self.actn(inputs)
         self.assertEqual([4,2,2,3], int_shape(actnormed))
-        
-        
+            
         convolved = self.conv1x1(inputs)
         self.assertEqual([4,2,2,3], int_shape(convolved))
         
@@ -48,6 +48,10 @@ class TestCaseLayers(unittest.TestCase):
         split_a, split_b = split_along_channels(squeezed)
         self.assertEqual([4,1,1,6], int_shape(split_a))
         self.assertEqual([4,1,1,6], int_shape(split_b))
+        
+        input_a, eps_b = self.split(squeezed)
+        self.assertEqual([4,1,1,6], int_shape(input_a))
+        self.assertEqual([4,1,1,6], int_shape(eps_b))
         
         # negative
         inputs = tf.ones([4, 3, 3, 2])

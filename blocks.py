@@ -81,8 +81,7 @@ class ClassifierInv(tf.keras.Model):
         y = self.flat(y_aa)
         y = self.dense(y)
         return tf.nn.softmax(y)
-        
-                  
+                          
     def compute_z(self, inputs):
         y = self.squeeze(inputs)
         y = self.flow_1(y)
@@ -94,8 +93,7 @@ class ClassifierInv(tf.keras.Model):
         y = tf.concat((y_aa, y_bb), axis=3)
         y = tf.reshape(y, y_b.get_shape())
         return tf.concat((y, y_b), axis=3)
-      
-      
+       
     def invert(self, z):    
         shape = int_shape(z)
         channels = shape[3]

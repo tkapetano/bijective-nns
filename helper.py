@@ -116,7 +116,27 @@ def reinstantiate_with_data_init(ModelClass, label_num, batch, ml=False):
     
     return model_reinst
 
+  
+class Gaussian_isotrop(object):
+    def __init__(self, mean, log_var):
+        self.mean = mean
+        self.log_var = log_var
     
+    def logp(self, x):
+        log2pi = tf.math.log(2 * np.pi)
+        logp_val = -0.5 * ((x - self.mean) ** 2. * tf.exp(-self.log_var) + self.log_var + log2pi)
+        return tf.reduce_sum(logp_val, axis=[1,2,3])
+    
+    def eps_recon(self, x):
+        return (x - self.mean) / tf.exp(self.log_var)
+    
+    def sample(self, eps=None):
+        if not eps:
+            eps = tf.keras.backend.random_normal(shape=self.mean.get_shape())
+        return self.mean + tf.exp(0.5 * self.log_var) * eps            
+        
+
+  
 def preprocess(train_data, discrete_vals=256):
     """Maps discrete data to floats in interval [0,1]"""
     x = tf.cast(train_data, 'float32')
