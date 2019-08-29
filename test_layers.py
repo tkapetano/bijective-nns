@@ -49,9 +49,13 @@ class TestCaseLayers(unittest.TestCase):
         self.assertEqual([4,1,1,6], int_shape(split_a))
         self.assertEqual([4,1,1,6], int_shape(split_b))
         
-        input_a, eps_b = self.split(squeezed)
+        input_a, input_b, eps_b = self.split(squeezed)
         self.assertEqual([4,1,1,6], int_shape(input_a))
+        self.assertEqual([4,1,1,6], int_shape(input_b))
         self.assertEqual([4,1,1,6], int_shape(eps_b))
+        
+        recon = self.split.invert_sample(input_a, eps_b)
+        self.assertEqual([4,1,1,12], int_shape(recon))        
         
         # negative
         inputs = tf.ones([4, 3, 3, 2])
@@ -84,6 +88,13 @@ class TestCaseLayers(unittest.TestCase):
         decoupled = self.coupling.invert(coupled)
         self.assertLessEqual(self.dist(squeezed, decoupled), 1e-5)
     
+        input_a, input_b, eps_b = self.split(squeezed)
+        split_1, _ = split_along_channels(squeezed)
+        self.assertLessEqual(self.dist(input_a, split_1), 1e-5)
+        
+        recon = self.split.invert_sample(input_a, eps_b)
+        recon_1, _ = split_along_channels(recon)
+        self.assertLessEqual(self.dist(split_1, (recon_1)), 1e-5)     
         
     
         

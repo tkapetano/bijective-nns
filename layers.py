@@ -247,7 +247,7 @@ class SplitLayer(layers.Layer):
     def build(self, input_shape):        
         width = 2
         channels = int(input_shape[-1])
-        self.conv = layers.Conv2D(2*channels, 
+        self.conv = layers.Conv2D(channels, 
                                    width, 
                                    name='conv',
                                    padding='same', 
@@ -268,12 +268,10 @@ class SplitLayer(layers.Layer):
             #print('this is coupling ' + str(log_det))
             self.add_loss(log_det)
         # forward pass
-        return x_a, gauss.eps_recon(x_b)
+        return x_a, x_b, gauss.eps_recon(x_b)
         
         
-    def invert(self, outputs, eps):
-        # split along channels
-        y_a = outputs
+    def invert_sample(self, y_a, eps):
         # apply nn
         h = self.conv(y_a)
         mean = h[:, :, :, 0::2]

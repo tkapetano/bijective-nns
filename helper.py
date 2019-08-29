@@ -131,7 +131,7 @@ class Gaussian_isotrop(object):
         return (x - self.mean) / tf.exp(self.log_var)
     
     def sample(self, eps=None):
-        if not eps:
+        if eps is not None:
             eps = tf.keras.backend.random_normal(shape=self.mean.get_shape())
         return self.mean + tf.exp(0.5 * self.log_var) * eps            
         

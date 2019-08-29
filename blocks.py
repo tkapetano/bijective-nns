@@ -21,7 +21,7 @@ from layers import Squeeze, Actnorm, Conv1x1, CouplingLayer2
 from helper import split_along_channels, int_shape
 
 
-class FlowstepACN(layers.Layer):
+class FlowstepACN(tf.keras.layers.Layer):
     def __init__(self, ml=True, data_init=None, **kwargs):
         super(FlowstepACN, self).__init__(**kwargs)
         self.actn = Actnorm(ml, data_init)
@@ -39,7 +39,7 @@ class FlowstepACN(layers.Layer):
         return self.actn.invert(x)
         
        
-class FlowstepSqueeze(tf.keras.Model):
+class FlowstepSqueeze(tf.keras.layers.Layer):
     def __init__(self, ml=True, data_init=None, **kwargs):
         super(FlowstepSqueeze, self).__init__(**kwargs)
         self.squeeze = Squeeze()
