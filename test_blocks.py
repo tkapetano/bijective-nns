@@ -47,7 +47,7 @@ class TestCaseBlocks(unittest.TestCase):
     def testLosses(self):
         inputs = tf.ones([4, 2, 2, 2])
         _ = self.flow(inputs)
-        #print('losses: ' + str(self.flow.losses) + ' end')
+        print('losses: ' + str(self.flow.losses) + ' end')
         self.assertEqual(len(self.flow.losses), 3)
         self.assertLessEqual(self.flow.losses[1], 1e-5)
         self.assertLessEqual(self.flow.losses[2], 1e-5)

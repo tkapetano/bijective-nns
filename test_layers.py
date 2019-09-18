@@ -98,11 +98,44 @@ class TestCaseLayers(unittest.TestCase):
         
     
         
-#TODO: test Losses 
-#    def testLosses(self):
-#        inputs = tf.ones([4, 2, 2, 2])
-#        actnormed = self.actn(inputs)
-#        #print(self.actn.losses)
+    def testLosses(self):
+        # Due to initialization Actnorm, Conv1x1 and Coupling have 0 loss at the beginning
+        inputs = tf.ones([4, 2, 2, 2])
+        _ = self.actn(inputs)
+        loss_acn = self.actn.losses
+        loss_expected = tf.zeros([4])
+        print(loss_acn)
+        self.assertLessEqual(self.dist(loss_expected, loss_acn), 1e-8)
+        
+        _ = self.conv1x1(inputs)
+        loss_conv = self.conv1x1.losses
+        print(loss_conv)
+        self.assertLessEqual(self.dist(loss_expected, loss_conv), 1e-5)
+        # small error here, why?
+        
+        _ = self.coupling(inputs)
+        loss_coupling = self.coupling.losses
+        print(loss_coupling)
+        self.assertLessEqual(self.dist(loss_expected, loss_coupling), 1e-8)
+        
+        # mean and log_var are initialized with 0s, hence loss boils down to 
+        # log det of density of standard normal
+        _, _, _ = self.split(inputs)
+        loss_split = self.split.losses
+        dims = int_shape(inputs)
+        factor = float(dims[0] * dims[1] * dims[2] * dims[3]) / 2.
+        loss_val = -0.5 * factor * (1. ** 2. + tf.math.log(2. * np.pi))
+        loss_expected = loss_val * tf.ones([4])
+        print(loss_split)
+        self.assertLessEqual(self.dist(loss_expected, loss_split), 1e-8)
+        
+        inputs = 2. * tf.ones([4, 2, 2, 2])
+        _, _, _ = self.split(inputs)
+        loss_split = self.split.losses
+        loss_val = -0.5 * factor * (2. ** 2. + tf.math.log(2. * np.pi))
+        loss_expected = loss_val * tf.ones([4])
+        self.assertLessEqual(self.dist(loss_expected, loss_split), 1e-8)
+        
     
         
 if __name__ == '__main__':

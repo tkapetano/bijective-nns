@@ -25,13 +25,12 @@ print(test_labels[0])
 
 def run_model(epochs):
     model = ClassifierInv(label_classes=10, ml=False)
-    loss_fn = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
+    loss_fn = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=False)
 
     model.compile(optimizer='adam',
                   loss=loss_fn,
                   metrics=['accuracy'])
                   
-    model.fit(train_images, train_labels, epochs=epochs, batch_size=32, 
-              validation_data=(test_images, test_labels))
+    model.fit(train_images, train_labels, epochs=5, batch_size=32)
+             # validation_data=(test_images, test_labels))
     
-

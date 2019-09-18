@@ -14,8 +14,9 @@ Collection of invertable layer architectures:
 
 from __future__ import absolute_import, division, print_function, unicode_literals
 import tensorflow as tf
-from tensorflow.keras import layers
 from helper import int_shape, split_along_channels, Gaussian_isotrop
+
+FAC = - 1. / (tf.math.log(2.) * 28 * 28 * 3200) # bits per subpixel..
 
 class Squeeze(tf.keras.layers.Layer):
     """Squeeze layer (Shi et. al. 2016).
@@ -49,7 +50,7 @@ class Squeeze(tf.keras.layers.Layer):
         x = tf.reshape(x, [-1, self.factor*h, self.factor*w, c//square])
         return x
     
-class Actnorm(layers.Layer):
+class Actnorm(tf.keras.layers.Layer):
     """Activation normalization layer (Kingma and Dhariwal, 2018).
     Use a affine transformation to standardize mean and variance
     # Arguments: - data_int: pair of initilizer functions, first entry for scale,
@@ -85,12 +86,12 @@ class Actnorm(layers.Layer):
                                     dtype='float32')
                                                
     def call(self, inputs):
-        dims = int_shape(inputs)
         if self.ml: 
             # add loss for max likelihood term
-            log_det =  dims[1] * dims[2] * tf.reduce_sum(tf.math.log(tf.math.abs(self.scale)))
+            w, h = float(inputs.shape[1]), float(inputs.shape[2])
+            log_det =  w * h * tf.reduce_sum(tf.math.log(tf.math.abs(self.scale)))
             #print('this is actnorm:' + str(log_det))
-            self.add_loss(log_det)
+            self.add_loss(FAC*log_det)
         # forward pass - channelwise ops
         return inputs * self.scale + self.bias
         
@@ -113,7 +114,7 @@ class Actnorm(layers.Layer):
         return dict(list(base_config.items()) + list(config.items()))
         
         
-class Conv1x1(layers.Layer):
+class Conv1x1(tf.keras.layers.Layer):
     """Invertible 1x1 convolution layer (Kingma and Dhariwal, 2018).
     A generalized permutation of channels as preparation for a coupling layer.
     # Input shape:  Arbitrary. 
@@ -136,7 +137,7 @@ class Conv1x1(layers.Layer):
             w, h = float(inputs.shape[1]), float(inputs.shape[2])
             log_det = w * h * tf.math.log(tf.math.abs(tf.linalg.det(self.w)))
             #print('this is 1x1conv ' + str(log_det))
-            self.add_loss(log_det)
+            self.add_loss(FAC*log_det)
         # forward pass
         w_filter = tf.reshape(self.w, [1,1, self.channels, self.channels])
         return tf.nn.conv2d(inputs, w_filter, [1,1,1,1], 'SAME')
@@ -156,7 +157,7 @@ class Conv1x1(layers.Layer):
         return dict(list(base_config.items()) + list(config.items()))
         
 
-class CouplingLayer2(layers.Layer):
+class CouplingLayer2(tf.keras.layers.Layer):
     """Affine Coupling layer (Dinh, Krueger, Bengio 2015).
     A generalized permutation of channels as preparation for a coupling layer
     # Arguments
@@ -173,17 +174,17 @@ class CouplingLayer2(layers.Layer):
     def build(self, input_shape):        
         width = 2
         channels = int(input_shape[-1])
-        self.conv1 = layers.Conv2D(128, 
+        self.conv1 = tf.keras.layers.Conv2D(128, 
                                    width, 
                                    name='conv1',
                                    padding='same', 
                                    activation='relu')
-        self.conv2 = layers.Conv2D(128, 
+        self.conv2 = tf.keras.layers.Conv2D(128, 
                                    width, 
                                    name='conv2',
                                    padding='same', 
                                    activation='relu')
-        self.conv3 = layers.Conv2D(channels, 
+        self.conv3 = tf.keras.layers.Conv2D(channels, 
                                    width, 
                                    name='conv3',
                                    padding='same', 
@@ -199,9 +200,9 @@ class CouplingLayer2(layers.Layer):
         if self.ml:
             # add loss for max likelihood term
             #log_det = tf.reduce_sum(tf.reduce_sum(s, axis=[1,2,3])).numpy()
-            log_det = tf.reduce_sum(s, axis=[1,2,3])
+            log_det = tf.reduce_sum(s, axis=[0,1,2,3])
             #print('this is coupling ' + str(log_det))
-            self.add_loss(log_det)
+            self.add_loss(FAC*log_det)
         # forward pass
         #scale = tf.math.exp(s)
         scale = tf.nn.sigmoid(s + 2.)
@@ -230,7 +231,7 @@ class CouplingLayer2(layers.Layer):
         base_config = super(CouplingLayer2, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
         
-class SplitLayer(layers.Layer):
+class SplitLayer(tf.keras.layers.Layer):
     """Affine Coupling layer (Dinh, Krueger, Bengio 2015).
     A generalized permutation of channels as preparation for a coupling layer
     # Arguments
@@ -247,7 +248,7 @@ class SplitLayer(layers.Layer):
     def build(self, input_shape):        
         width = 2
         channels = int(input_shape[-1])
-        self.conv = layers.Conv2D(channels, 
+        self.conv = tf.keras.layers.Conv2D(channels, 
                                    width, 
                                    name='conv',
                                    padding='same', 
@@ -264,7 +265,7 @@ class SplitLayer(layers.Layer):
         if self.ml:
             # add loss for max likelihood term
             log_det = gauss.logp(x_b)
-            #log_det = tf.reduce_sum(s, axis=[1,2,3])
+            log_det = tf.reduce_sum(FAC*log_det)
             #print('this is coupling ' + str(log_det))
             self.add_loss(log_det)
         # forward pass
