@@ -8,93 +8,112 @@ Created on Thu Aug 29 19:38:00 2019
 
 from __future__ import absolute_import, division, print_function, unicode_literals
 import tensorflow as tf
-from tensorflow.keras import layers
-from layers import Squeeze, Actnorm, Conv1x1, CouplingLayer2, SplitLayer
-from helper import split_along_channels, int_shape
+
+from invertible_layers import SplitLayer
+from helper import int_shape
 from blocks import FlowstepACN, FlowstepSqueeze
 
 class Encoder(tf.keras.layers.Layer):
-    def __init__(self, label_classes, input_shape, name='encoder', ml=False, data_init=None, **kwargs):
+    def __init__(self, name='encoder', ml=True, blocks_per_level=[4,4], **kwargs):
         super(Encoder, self).__init__(name=name, **kwargs)
-        self.flow_1 = FlowstepSqueeze(ml)
-        self.flow_2 = FlowstepACN(ml, data_init)
-        self.flow_3 = FlowstepACN(ml, data_init)
-        self.flow_4 = FlowstepACN(ml, data_init)
-        self.flow_5 = FlowstepACN(ml, data_init)
-        self.split_1 = SplitLayer(ml)
-        self.flow_6 = FlowstepSqueeze(ml)
-        self.flow_7 = FlowstepACN(ml, data_init)
-        self.flow_8 = FlowstepACN(ml, data_init)
-        self.flow_9 = FlowstepACN(ml, data_init)
-        self.flow_10 = FlowstepACN(ml, data_init)
-        self.split_2 = SplitLayer(ml)
+        self.level_1 = [FlowstepSqueeze(ml=ml)]
+        for i in range(blocks_per_level[0]):
+            self.level_1.append(FlowstepACN(ml=ml))
+        self.split_1 = SplitLayer(ml=ml)
+        self.level_2 =  [FlowstepSqueeze(ml=ml)]
+        for i in range(blocks_per_level[1]):
+            self.level_2.append(FlowstepACN(ml=ml))
+        self.split_2 = SplitLayer(ml=ml)
           
     def call(self, inputs):
-        y = self.flow_1(inputs)
-        y = self.flow_2(y)
-        y = self.flow_3(y)
-        y = self.flow_4(y)
-        y = self.flow_5(y)
-        y_a, y_b, eps_1 = self.split_1(y)
-        y = self.flow_6(y_a)
-        y = self.flow_7(y)
-        y = self.flow_8(y)
-        y = self.flow_9(y)
-        y = self.flow_10(y)
+        shape = int_shape(inputs)
+        assert shape[1] % 4 == 0 and shape[2] % 4 == 0
+        y = inputs
+        for block in self.level_1:
+            y = block(y)
+        y, y_b, eps_1 = self.split_1(y)
+        for block in self.level_2:
+            y = block(y)
         y_aa, y_ab, eps_2 = self.split_2(y)
         return y_aa, y_ab, y_b, eps_1, eps_2
           
     def invert(self, z_a, z_ab, z_b, sample=False):    
         shape = int_shape(z_a)
-        channels = shape[3]
-        assert channels % 2 == 0 and shape[1] % 2 == 0 and shape[2] % 2 == 0
-        if sample:
-            x_a = self.split_2.invert_sample(z_a, None)     
-        else:
-            x_a = self.split_2.invert(z_a, z_ab)        
-        x_a = self.flow_10.invert(x_a)
-        x_a = self.flow_9.invert(x_a)
-        x_a = self.flow_8.invert(x_a)
-        x_a = self.flow_7.invert(x_a)
-        x_a = self.flow_6.invert(x_a)
-        if sample:
-            x = self.split_1.invert_sample(x_a, None)
-        else:
-            x = self.split_1.invert(x_a, z_b)
-        x = self.flow_5.invert(x)
-        x = self.flow_4.invert(x)
-        x = self.flow_3.invert(x)
-        x = self.flow_2.invert(x)
-        x = self.flow_1.invert(x)
+        assert shape[-1] % 4 == 0
+        x = self.split_2.invert(z_a, z_ab, sample=sample)        
+        for block in reversed(self.level_2):
+            x = block.invert(x)
+        x = self.split_1.invert(x, z_b, sample=sample)
+        for block in reversed(self.level_1):
+            x = block.invert(x)
         return x
         
-    #def compute_output_shapes
+    def data_dependent_init(self, init_data_batch):
+        inputs = init_data_batch
+        for block in self.level_1:
+            inputs = block.data_dependent_init(inputs)
+        inputs, _, _ = self.split_1(inputs)
+        for block in self.level_2:
+            inputs = block.data_dependent_init(inputs)
+    
+    def compute_output_shapes(self, input_shape):
+        out_fst_level = [input_shape[-2]/2, input_shape[-2]/2, input_shape[-1]*2]
+        out_scd_level = [input_shape[-2]/4, input_shape[-2]/4, input_shape[-1]*4]
+        return 2*[out_scd_level] + 2*[out_fst_level] + [out_scd_level]
+        
 
   
-class Glow(tf.keras.Model):
-  def __init__(self, label_classes, input_shape, ml):
-    super(Glow, self).__init__()
-    self.encoder = Encoder(label_classes, input_shape=input_shape, ml=ml, data_init=None)
-    self.flatten =  tf.keras.layers.Flatten()
-    self.dense = tf.keras.layers.Dense(label_classes)
-    #self.nuisance_classifier = tf.keras.Sequential(
-    #    [tf.keras.layers.InputLayer(input_shape=)
-    #])
+class GlowNet(tf.keras.Model):
+    def __init__(self, label_classes, input_shape, name='glownet', ml=True, **kwargs):
+        super(GlowNet, self).__init__(name=name, **kwargs)
+        self.ml = ml
+        self.encoder = Encoder(ml=ml)
+        self.flatten =  tf.keras.layers.Flatten()
+        self.dense = tf.keras.layers.Dense(label_classes)
+        self.flatten_nuisance =  tf.keras.layers.Flatten()
+        self.dense_nuisance = tf.keras.layers.Dense(label_classes)
+      
+    def call(self, inputs):
+        self.enable_only_classification(ml=self.ml)
+        y, _, _, _, _ = self.encoder(inputs)
+        y = self.flatten(y)
+        y = self.dense(y)
+        return tf.nn.softmax(y)
+        
+    def call_all(self, inputs):
+        y_aa, y_ab, y_b, _, _ = self.encoder(inputs)
+        y_aa = self.flatten(y_aa)
+        y_aa = self.dense(y_aa)
+        y_classification = tf.nn.softmax(y_aa)
+    
+        y_bb = tf.concat([self.flatten(y_ab), self.flatten(y_b)], axis=-1) 
+        y_bb = self.dense_nuisance(y_bb)
+        y_nuisance_classification = tf.nn.softmax(y_bb)
+      
+        return  y_classification, y_nuisance_classification
+        
+    def enable_only_classification(self, ml=True):
+        self.encoder.trainiable = True  
+        self.dense.trainable = True  
+        self.dense_nuisance.trainable = False
+        if ml:
+            self.split_1.trainable = True
+            self.split_2.trainable = True   
+        else:
+            self.split_1.trainable = False
+            self.split_2.trainable = False 
+         
+    def enable_only_nuisance_classification(self, ml=True):
+        self.encoder.trainiable = False 
+        self.dense.trainable = False  
+        self.dense_nuisance.trainable = True
+        if ml:
+            self.split_1.trainable = True
+            self.split_2.trainable = True   
+        else:
+            self.split_1.trainable = False
+            self.split_2.trainable = False 
+    
     
       
-  def call(self, inputs):
-      y, _, _, _, _ = self.encoder(inputs)
-      y = self.flatten(y)
-      y = self.dense(y)
-      #ml_loss = self.encoder.losses
-      #print(ml_loss)
-      #self.add_loss(ml_loss)
-      return tf.nn.softmax(y)
-      
-#  @tf.function
-#  def sample(self):
-#    z_a = tf.random.normal(shape=(28,28,1))
-#    return self.encoder.invert(z_a, None, None, sample=True)
-
-
-model = Glow(10, (28,28,1), ml=True)
+  
