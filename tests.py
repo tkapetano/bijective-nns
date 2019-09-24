@@ -100,7 +100,7 @@ class TestCaseLayers(unittest.TestCase):
         
     
     def test_add_losses(self):
-        # Due to initialization Actnorm, Conv1x1 and Coupling have 0 loss at the beginning
+        # Due to initialization Actnorm and Conv1x1  have 0 loss at the beginning
         inputs = tf.ones([4, 2, 2, 2])
         self.actn(inputs)
         [loss_acn] = self.actn.losses
@@ -113,16 +113,17 @@ class TestCaseLayers(unittest.TestCase):
         # has only det = 1 up to a small error
         self.assertLessEqual(L2NORM(loss_expected, loss_conv.numpy()), 1e-6)
         
+        loss_expected =  4. * tf.math.log(tf.nn.sigmoid(2.))
         self.coupling(inputs)
         [loss_coupling] = self.coupling.losses
-        self.assertEqual(loss_expected, loss_coupling.numpy())
+        self.assertLessEqual(L2NORM(loss_expected, loss_coupling.numpy()), 1e-6)
         
         # mean and log_var are initialized with zeros, hence loss boils down to 
         # log det of density of standard normal
         self.split(inputs)
         [loss_split] = self.split.losses
         dims = int_shape(inputs)
-        factor = float(dims[0] * dims[1] * dims[2] * dims[3]) / 2.
+        factor =  float(dims[1] * dims[2] * dims[3]) / 2.
         loss_expected = -0.5 * factor * (1. ** 2. + tf.math.log(2. * np.pi))
         self.assertEqual(loss_expected.numpy(), loss_split.numpy())
         

@@ -92,28 +92,17 @@ class GlowNet(tf.keras.Model):
       
         return  y_classification, y_nuisance_classification
         
-    def enable_only_classification(self, ml=True):
+    def enable_only_classification(self):
         self.encoder.trainiable = True  
         self.dense.trainable = True  
+        self.encoder.split_1.trainable = False
+        self.encoder.split_2.trainable = False
         self.dense_nuisance.trainable = False
-        if ml:
-            self.split_1.trainable = True
-            self.split_2.trainable = True   
-        else:
-            self.split_1.trainable = False
-            self.split_2.trainable = False 
          
-    def enable_only_nuisance_classification(self, ml=True):
+    def enable_only_nuisance_classification(self):
         self.encoder.trainiable = False 
         self.dense.trainable = False  
         self.dense_nuisance.trainable = True
-        if ml:
-            self.split_1.trainable = True
-            self.split_2.trainable = True   
-        else:
-            self.split_1.trainable = False
-            self.split_2.trainable = False 
-    
-    
+        
       
   

@@ -32,24 +32,49 @@ def split_along_channels(inputs):
 
   
 class GaussianIsotrop(object):
-    """An Gaussian isotropic distribution that can be used for sampling and 
+    """A Gaussian isotropic distribution that can be used for sampling and 
         calculating the log density.
     """
-    def __init__(self, mean, log_var):
+    def __init__(self, mean, log_std):
         self.mean = mean
-        self.log_var = log_var
+        self.log_std = log_std
     
     def logp(self, x):
         log2pi = tf.math.log(2 * np.pi)
-        logp_val = -0.5 * ((x - self.mean) ** 2. * tf.exp(-self.log_var) + self.log_var + log2pi)
+        logp_val = -0.5 * ((x - self.mean) ** 2. * tf.exp(-2. * self.log_std) 
+                    + 2. * self.log_std + log2pi)
         return tf.reduce_sum(logp_val, axis=[1,2,3])
     
     def eps_recon(self, x):
-        return (x - self.mean) / tf.exp(self.log_var)
+        return (x - self.mean) / tf.exp(self.log_std)
     
     def sample(self, eps=None):
         if eps is not None:
             eps = tf.keras.backend.random_normal(shape=self.mean.get_shape())
-        return self.mean + tf.exp(0.5 * self.log_var) * eps            
+        return self.mean + tf.exp(self.log_std) * eps            
         
+class LogisticDiscretized(object):
+    """A discretized logistic distribution that can be used for sampling and 
+        calculating the log density.
+    """
+    def __init__(self, mean, log_scale, bin_size=1./256.):
+        self.mean = mean
+        self.log_scale = log_scale
+        self.bin_size = bin_size
+        
+    def logp(self, x):
+        x = (x - self.mean) / self.log_scale
+        logp_val = tf.math.log(tf.nn.sigmoid(x + self.bin_size / self.log_scale) - tf.sigmoid(x) + 1e-7)
+        return tf.reduce_sum(logp_val, axis=[1,2,3])
+        
+    def eps_recon(self, x):
+        return (x - self.mean) / tf.exp(self.log_scale)
+    
+    def sample(self, eps=None):
+        if eps is not None:
+            eps_unif = tf.keras.backend.random_uniform(shape=self.mean.get_shape())
+            eps = tf.math.log(eps_unif) - tf.math.log(1. - eps_unif)
+        return self.mean + tf.exp(self.log_scale) * eps            
+    
+    
    

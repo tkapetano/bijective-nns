@@ -12,7 +12,7 @@ Collection of invertable layer architectures:
 
 from __future__ import absolute_import, division, print_function, unicode_literals
 import tensorflow as tf
-from helper import int_shape, split_along_channels, GaussianIsotrop
+from helper import int_shape, split_along_channels, GaussianIsotrop, LogisticDiscretized
 
 DTYPE = 'float32'
 
@@ -161,15 +161,14 @@ class CouplingLayer(tf.keras.layers.Layer):
         # apply the neural net to first partition component to get scaling 
         # and translation parameters
         intermediate = self.conv3(self.conv2(self.conv1(x_a)))
-        t = intermediate[:, :, :, 0::2]
+        bias = intermediate[:, :, :, 0::2]
         s = intermediate[:, :, :, 1::2]
+        scale = tf.nn.sigmoid(s + 2.)
+        y_b = x_b * scale + bias
         if self.ml:
             # add loss for max likelihood term
-            log_det = tf.reduce_sum(s, axis=[1,2,3])
+            log_det = tf.reduce_sum(tf.math.log(scale), axis=[1,2,3])
             self.add_loss(tf.reduce_mean(log_det))
-        #scale = tf.math.exp(s)
-        scale = tf.nn.sigmoid(s + 2.)
-        y_b = x_b * scale + t
         return tf.concat([x_a,y_b], axis=3)
         
         
@@ -193,10 +192,11 @@ class SplitLayer(tf.keras.layers.Layer):
     # Input shape:  Requieres an even number of channels. 
     # Output shape: Three elements of input shape with half the number of channels
     """
-    def __init__(self, name='split', ml=True, kernel_size=2, **kwargs):
+    def __init__(self, name='split', ml=True, kernel_size=2, use_gauss=True, **kwargs):
         super(SplitLayer, self).__init__(name=name, **kwargs)
         self.ml = ml
         self.kernel_size = kernel_size
+        self.use_gauss = use_gauss
         
         
     def build(self, input_shape):        
@@ -215,23 +215,29 @@ class SplitLayer(tf.keras.layers.Layer):
         # and translation parameters
         h = self.conv(x_a)
         mean = h[:, :, :, 0::2]
-        log_var = h[:, :, :, 1::2]
-        gauss = GaussianIsotrop(mean, log_var)
+        log_std = h[:, :, :, 1::2]
+        if self.use_gauss:
+            dist = GaussianIsotrop(mean, log_std)
+        else:
+            dist = LogisticDiscretized(mean, log_std)
         if self.ml:
             # add loss for max likelihood term
-            log_det = gauss.logp(x_b)
-            log_det = tf.reduce_sum(log_det)
+            log_det = dist.logp(x_b)
+            log_det = tf.reduce_mean(log_det)
             self.add_loss(log_det)
-        return x_a, x_b, gauss.eps_recon(x_b)
+        return x_a, x_b, dist.eps_recon(x_b)
         
         
     def invert(self, y_a, y_b, sample=False, eps=None):
         if sample:
             h = self.conv(y_a)
             mean = h[:, :, :, 0::2]
-            log_var = h[:, :, :, 1::2]
-            gauss = GaussianIsotrop(mean, log_var)
-            y_b = gauss.sample(eps)
+            log_std = h[:, :, :, 1::2]
+            if self.use_gauss:
+                dist = GaussianIsotrop(mean, log_std)
+            else:
+                dist = LogisticDiscretized(mean, log_std)
+            y_b = dist.sample(eps)
         return tf.concat([y_a, y_b], axis=3)
         
     def compute_output_shape(self, input_shape):
