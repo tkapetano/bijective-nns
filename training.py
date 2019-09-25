@@ -131,5 +131,5 @@ def train(model, train_dataset, num_epochs,
                 train_accuracy_results,  train_nuisance_accuracy_results
                 
 train_dataset, test_dataset = prepare_mnist_dataset()
-model = GlowNet(NUM_OF_LABELS, [28,28,1])
-train(model, train_dataset, num_epochs=2)
+#model = GlowNet(NUM_OF_LABELS, [28,28,1])
+#train(model, train_dataset, num_epochs=2)
