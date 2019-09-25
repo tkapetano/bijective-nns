@@ -136,7 +136,7 @@ def train(model, train_dataset, num_epochs,
                                                                     epoch_nuisance_class_loss_avg.result(),
                                                                     epoch_nll_loss_avg.result()))    
                                                                     
-        return train_loss_results, train_class_loss_results, \
+    return train_loss_results, train_class_loss_results, \
                 train_nuisance_class_loss_results, train_nll_loss_results, \
                 train_accuracy_results,  train_nuisance_accuracy_results
                 
