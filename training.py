@@ -11,8 +11,13 @@ import tensorflow as tf
 from helper import int_shape
 from glow import GlowNet
 
+from time import time
+
 NUM_OF_LABELS = 10
-BATCH_SIZE = 32
+BATCH_SIZE = 128
+INPUT_SHAPE=[28,28,1]
+FACTOR =  INPUT_SHAPE[0] * INPUT_SHAPE[1] * INPUT_SHAPE[2] * tf.math.log(2.)
+LOSS = tf.keras.losses.SparseCategoricalCrossentropy()
 
 def prepare_mnist_dataset():
     """Loads the MNIST dataset, dequantizes, rescales to [0,1], shuffles 
@@ -31,7 +36,8 @@ def prepare_mnist_dataset():
     
     def make_dataset(data, labels, total_num, batch_size):
         dataset = tf.data.Dataset.from_tensor_slices((data, labels))
-        return dataset.shuffle(total_num).map(rescale).batch(batch_size)   
+        dataset = dataset.shuffle(total_num).map(rescale).batch(batch_size)  
+        return dataset.prefetch(buffer_size=tf.data.experimental.AUTOTUNE) 
     
     train_dataset = make_dataset(train_images, train_labels, 60000, BATCH_SIZE)
     test_dataset = make_dataset(test_images, test_labels, 10000, BATCH_SIZE)
@@ -49,22 +55,19 @@ def track_gradients_and_losses(model, inputs, targets,
                   and the gradient tape of the total loss wrt the model's trainable
                   variables.
     """
-    loss = tf.keras.losses.SparseCategoricalCrossentropy()
     with tf.GradientTape() as tape:
         loss_value = 0
-        y_pred = model(inputs)
-        loss_classification = loss(targets, y_pred)
+        y_pred, y_pred_nuisance= model.call_all(inputs)
+        
+        loss_classification = LOSS(targets, y_pred)
         loss_value += multi_task_loss_weights[0] * loss_classification
         
-        y_pred_nuisance = model.call_nuisance(inputs)
-        loss_nuisance = - loss(targets, y_pred_nuisance)
+        loss_nuisance = - LOSS(targets, y_pred_nuisance)
         loss_value += multi_task_loss_weights[1] * loss_nuisance 
    
-        shape = int_shape(inputs)
-        factor =  shape[1] * shape[2] * shape[3]
-        loss_ml = -sum(model.losses) / (tf.math.log(2.) * factor)
+        loss_ml = -sum(model.losses) / FACTOR
         if dequant:
-            loss_ml += tf.math.log(256.) * factor / BATCH_SIZE
+            loss_ml += tf.math.log(256.) * FACTOR / BATCH_SIZE
         loss_value += multi_task_loss_weights[2] * loss_ml
         
     return loss_value, [loss_classification, loss_nuisance, loss_ml], \
@@ -82,18 +85,20 @@ def train(model, train_dataset, num_epochs,
     
     for epoch in range(num_epochs):
         print('Starting epoch {} ..'.format(epoch))
+        start = time()
         epoch_loss_avg = tf.keras.metrics.Mean()
         epoch_class_loss_avg = tf.keras.metrics.Mean()
         epoch_nuisance_class_loss_avg = tf.keras.metrics.Mean()
         epoch_nll_loss_avg = tf.keras.metrics.Mean()
         epoch_class_accuracy = tf.keras.metrics.SparseCategoricalAccuracy()
         epoch_nuisance_class_accuracy = tf.keras.metrics.SparseCategoricalAccuracy()
-        count = 0
+        steps = 0
     
         # Training loop - using batches
         for image_batch, label_batch in train_dataset:
-            count += 1
-            print('{} of {} steps'.format(count, 60000/32))
+            steps += 1
+            if steps % 50:
+                print('Processed {} of {} steps'.format(steps, int(60000/BATCH_SIZE)))
         # Optimize the model
             loss_value, loss_list, grads = track_gradients_and_losses(model, 
                                                                       image_batch, 
@@ -107,13 +112,14 @@ def train(model, train_dataset, num_epochs,
             epoch_nuisance_class_loss_avg(loss_list[1])
             epoch_nll_loss_avg(loss_list[2])
 
-            y_pred = model(image_batch)
+            # suppress when only training is the goal
+            y_pred, y_nuisance_pred = model.call_all(image_batch)
             epoch_class_accuracy(label_batch, y_pred)
-            y_nuisance_pred = model.call_nuisance(image_batch)
             epoch_nuisance_class_accuracy(label_batch, y_nuisance_pred)
     
         # End epoch
-        print('Epoch {} finished'.format(epoch))
+        end = time()
+        print('Epoch {} finished after {:3f}'.format(epoch, end-start))
         
         train_loss_results.append(epoch_loss_avg.result())
         train_class_loss_results.append(epoch_class_loss_avg.result())
@@ -134,6 +140,6 @@ def train(model, train_dataset, num_epochs,
                 train_nuisance_class_loss_results, train_nll_loss_results, \
                 train_accuracy_results,  train_nuisance_accuracy_results
                 
-train_dataset, test_dataset = prepare_mnist_dataset()
+#train_dataset, test_dataset = prepare_mnist_dataset()
 #model = GlowNet(NUM_OF_LABELS, [28,28,1])
 #train(model, train_dataset, num_epochs=2)
