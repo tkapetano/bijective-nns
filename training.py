@@ -87,9 +87,12 @@ def train(model, train_dataset, num_epochs,
         epoch_nll_loss_avg = tf.keras.metrics.Mean()
         epoch_class_accuracy = tf.keras.metrics.SparseCategoricalAccuracy()
         epoch_nuisance_class_accuracy = tf.keras.metrics.SparseCategoricalAccuracy()
+        count = 0
     
         # Training loop - using batches
         for image_batch, label_batch in train_dataset:
+            count += 1
+            print('{} of {} steps'.format(count, 60000/32))
         # Optimize the model
             loss_value, loss_list, grads = track_gradients_and_losses(model, 
                                                                       image_batch, 
