@@ -68,41 +68,47 @@ class GlowNet(tf.keras.Model):
         super(GlowNet, self).__init__(name=name, **kwargs)
         self.ml = ml
         self.encoder = Encoder(ml=ml)
+        self.classifier = tf.keras.models.Sequential([
+                                    tf.keras.layers.Flatten(),
+                                    tf.keras.layers.Dense(label_classes, activation='softmax')])
         self.flatten =  tf.keras.layers.Flatten()
-        self.dense = tf.keras.layers.Dense(label_classes)
-        self.flatten_nuisance =  tf.keras.layers.Flatten()
-        self.dense_nuisance = tf.keras.layers.Dense(label_classes)
+        self.nuisance_classifier = tf.keras.models.Sequential([
+                                    tf.keras.layers.Dense(256, activation='relu'),
+                                    tf.keras.layers.Dense(128, activation='relu'),
+                                    tf.keras.layers.Dense(128, activation='relu'),
+                                    tf.keras.layers.Dense(label_classes, activation='softmax')])
       
     def call(self, inputs):
-        self.enable_only_classification(ml=self.ml)
-        y, _, _, _, _ = self.encoder(inputs)
-        y = self.flatten(y)
-        y = self.dense(y)
-        return tf.nn.softmax(y)
-        
-    def call_all(self, inputs):
-        y_aa, y_ab, y_b, _, _ = self.encoder(inputs)
-        y_aa = self.flatten(y_aa)
-        y_aa = self.dense(y_aa)
-        y_classification = tf.nn.softmax(y_aa)
-    
+        """Allows for usage of keras API: model.fit, model.evaluate etc.
+            Make sure to call model.enable_only_classification() and 
+            initialize the model with ml=False in this case.
+        """
+        y, y_ab, y_b, _, _ = self.encoder(inputs)
+        # nuisance classifier is only called here, to assure the model is build
+        # correctly and dimensions can be automatically infered
         y_bb = tf.concat([self.flatten(y_ab), self.flatten(y_b)], axis=-1) 
-        y_bb = self.dense_nuisance(y_bb)
-        y_nuisance_classification = tf.nn.softmax(y_bb)
-      
-        return  y_classification, y_nuisance_classification
+        self.nuisance_classifier(y_bb)
+        return self.classifier(y)
+        
+    def call_nuisance(self, inputs):
+        _, y_ab, y_b, _, _ = self.encoder(inputs)    
+        y_bb = tf.concat([self.flatten(y_ab), self.flatten(y_b)], axis=-1) 
+        return self.nuisance_classifier(y_bb)
         
     def enable_only_classification(self):
+        """Freezes all weight that do not feed into the semantic variables."""
         self.encoder.trainiable = True  
-        self.dense.trainable = True  
         self.encoder.split_1.trainable = False
         self.encoder.split_2.trainable = False
-        self.dense_nuisance.trainable = False
+        self.classifier.trainable = True
+        self.nuisance_classifier.trainable = False
          
     def enable_only_nuisance_classification(self):
-        self.encoder.trainiable = False 
-        self.dense.trainable = False  
-        self.dense_nuisance.trainable = True
+        """Freezes all weight that do not feed into the nuisance variables."""
+        self.nuisance_classifier.trainable = True
+        self.encoder.trainable = False 
+        self.classifier.trainable = False
+        
         
       
   

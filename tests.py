@@ -11,7 +11,7 @@ import numpy as np
 from invertible_layers import Squeeze, Actnorm, Conv1x1, CouplingLayer, SplitLayer
 from blocks import FlowstepACN, FlowstepSqueeze
 from helper import int_shape, split_along_channels
-from glow import Encoder
+from glow import Encoder, GlowNet
 
 import unittest
 
@@ -182,27 +182,27 @@ class TestCaseBlocks(unittest.TestCase):
         acn_output = self.flow.acn(inputs)
         post_stddev = tf.math.reduce_std(acn_output)
         post_mean = tf.math.reduce_mean(acn_output)    
-        self.assertLessEqual(L2NORM(post_mean, 3.0), 0.5)
-        self.assertLessEqual(L2NORM(post_stddev, 2.5), 0.5)
+        self.assertLessEqual(L2NORM(post_mean, 3.0), 0.75)
+        self.assertLessEqual(L2NORM(post_stddev, 2.5), 0.75)
         # after data dependent init activation should be normalized
         self.flow.data_dependent_init(inputs)
         acn_output = self.flow.acn(inputs)
         post_stddev = tf.math.reduce_std(acn_output)
         post_mean = tf.math.reduce_mean(acn_output)
-        self.assertLessEqual(L2NORM(post_mean, 0), 0.5)
-        self.assertLessEqual(L2NORM(post_stddev, 1), 0.5)
+        self.assertLessEqual(L2NORM(post_mean, 0), 0.75)
+        self.assertLessEqual(L2NORM(post_stddev, 1), 0.75)
         
         acn_output = self.flow_squeeze.acn(self.flow_squeeze.squeeze(inputs))
         post_stddev = tf.math.reduce_std(acn_output)
         post_mean = tf.math.reduce_mean(acn_output)    
-        self.assertLessEqual(L2NORM(post_mean, 3.0), 0.5)
-        self.assertLessEqual(L2NORM(post_stddev, 2.5), 0.5)
+        self.assertLessEqual(L2NORM(post_mean, 3.0), 0.75)
+        self.assertLessEqual(L2NORM(post_stddev, 2.5), 0.75)
         self.flow_squeeze.data_dependent_init(inputs)
         acn_output = self.flow_squeeze.acn(self.flow_squeeze.squeeze(inputs))
         post_stddev = tf.math.reduce_std(acn_output)
         post_mean = tf.math.reduce_mean(acn_output)
-        self.assertLessEqual(L2NORM(post_mean, 0), 0.5)
-        self.assertLessEqual(L2NORM(post_stddev, 1), 0.5)
+        self.assertLessEqual(L2NORM(post_mean, 0), 0.75)
+        self.assertLessEqual(L2NORM(post_stddev, 1), 0.75)
   
 class TestCaseGlow(unittest.TestCase):
     """
@@ -211,6 +211,11 @@ class TestCaseGlow(unittest.TestCase):
     def setUp(self):
         ml = True 
         self.encoder = Encoder(ml=ml)
+        self.model = GlowNet(10, [28,28,1])
+        self.model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+        t = tf.TensorShape([4, 28, 28, 1])
+        self.model.build(t)
+
         
     def test_in_and_output_shapes(self):
         inputs = tf.ones([4, 4, 4, 3])
@@ -246,8 +251,21 @@ class TestCaseGlow(unittest.TestCase):
         acn_output = self.encoder.level_1[2].acn(inputs)
         post_stddev = tf.math.reduce_std(acn_output)
         post_mean = tf.math.reduce_mean(acn_output)
-        self.assertLessEqual(L2NORM(post_mean, 0), 0.5)
-        self.assertLessEqual(L2NORM(post_stddev, 1), 0.5)
+        self.assertLessEqual(L2NORM(post_mean, 0), 0.75)
+        self.assertLessEqual(L2NORM(post_stddev, 1), 0.75)
+        
+        
+    def test_glow_enable_parts(self):
+        self.model.enable_only_classification()    
+        num_classifier_weights = len(self.model.encoder.trainable_variables) \
+                                    - len(self.model.encoder.split_1.trainable_variables) \
+                                    - len(self.model.encoder.split_2.trainable_variables) \
+                                    + len(self.model.classifier.trainable_variables)
+        self.assertEqual(num_classifier_weights, len(self.model.trainable_variables))
+        
+        self.model.enable_only_nuisance_classification()
+        num_nuisance_classifier_weights = len(self.model.nuisance_classifier.trainable_variables)
+        self.assertEqual(num_nuisance_classifier_weights, len(self.model.trainable_variables))
         
         
 class TestCaseHelper(unittest.TestCase):
