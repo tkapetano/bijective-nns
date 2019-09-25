@@ -212,7 +212,7 @@ class TestCaseGlow(unittest.TestCase):
         ml = True 
         self.encoder = Encoder(ml=ml)
         self.model = GlowNet(10, [28,28,1])
-        self.model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+        #self.model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
         t = tf.TensorShape([4, 28, 28, 1])
         self.model.build(t)
 

@@ -95,6 +95,11 @@ class GlowNet(tf.keras.Model):
         y_bb = tf.concat([self.flatten(y_ab), self.flatten(y_b)], axis=-1) 
         return self.nuisance_classifier(y_bb)
         
+    def call_all(self, inputs):
+        y, y_ab, y_b, _, _ = self.encoder(inputs)    
+        y_bb = tf.concat([self.flatten(y_ab), self.flatten(y_b)], axis=-1) 
+        return self.classifier(y), self.nuisance_classifier(y_bb)
+        
     def enable_only_classification(self):
         """Freezes all weight that do not feed into the semantic variables."""
         self.encoder.trainiable = True  

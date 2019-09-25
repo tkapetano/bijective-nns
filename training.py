@@ -37,6 +37,7 @@ def prepare_mnist_dataset():
     test_dataset = make_dataset(test_images, test_labels, 10000, BATCH_SIZE)
     return train_dataset, test_dataset
 
+
 def track_gradients_and_losses(model, inputs, targets, 
                                multi_task_loss_weights=[1, 1, 1],
                                dequant=True):
