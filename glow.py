@@ -14,16 +14,16 @@ from helper import int_shape
 from blocks import FlowstepACN, FlowstepSqueeze
 
 class Encoder(tf.keras.layers.Layer):
-    def __init__(self, name='encoder', ml=True, blocks_per_level=[4,4], **kwargs):
+    def __init__(self, name='encoder', ml=True, use_gauss=True, blocks_per_level=[4,4], **kwargs):
         super(Encoder, self).__init__(name=name, **kwargs)
         self.level_1 = [FlowstepSqueeze(ml=ml)]
         for i in range(blocks_per_level[0]):
             self.level_1.append(FlowstepACN(ml=ml))
-        self.split_1 = SplitLayer(ml=ml)
+        self.split_1 = SplitLayer(ml=ml, use_gauss=use_gauss)
         self.level_2 =  [FlowstepSqueeze(ml=ml)]
         for i in range(blocks_per_level[1]):
             self.level_2.append(FlowstepACN(ml=ml))
-        self.split_2 = SplitLayer(ml=ml)
+        self.split_2 = SplitLayer(ml=ml, use_gauss=use_gauss)
           
     def call(self, inputs):
         shape = int_shape(inputs)
@@ -64,10 +64,10 @@ class Encoder(tf.keras.layers.Layer):
 
   
 class GlowNet(tf.keras.Model):
-    def __init__(self, label_classes, input_shape, name='glownet', ml=True, **kwargs):
+    def __init__(self, label_classes, input_shape, name='glownet', ml=True, use_gauss=True, **kwargs):
         super(GlowNet, self).__init__(name=name, **kwargs)
         self.ml = ml
-        self.encoder = Encoder(ml=ml)
+        self.encoder = Encoder(ml=ml, use_gauss=use_gauss)
         self.classifier = tf.keras.models.Sequential([
                                     tf.keras.layers.Flatten(),
                                     tf.keras.layers.Dense(label_classes, activation='softmax')])
@@ -102,7 +102,7 @@ class GlowNet(tf.keras.Model):
         
     def enable_only_classification(self):
         """Freezes all weight that do not feed into the semantic variables."""
-        self.encoder.trainiable = True  
+        self.encoder.trainable = True  
         self.encoder.split_1.trainable = False
         self.encoder.split_2.trainable = False
         self.classifier.trainable = True

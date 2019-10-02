@@ -23,7 +23,7 @@ class FlowstepACN(tf.keras.layers.Layer):
         self.acn = Actnorm(ml=ml)
         self.conv1x1 = Conv1x1(ml=ml)
         self.coupling = CouplingLayer(ml=ml)
-               
+        
     def call(self, inputs):
         y = self.acn(inputs)
         y = self.conv1x1(y)
