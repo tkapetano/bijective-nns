@@ -49,7 +49,7 @@ class GaussianIsotrop(object):
         return (x - self.mean) / tf.exp(self.log_std)
     
     def sample(self, eps=None):
-        if eps is not None:
+        if eps is None:
             eps = tf.keras.backend.random_normal(shape=self.mean.get_shape())
         return self.mean + tf.exp(self.log_std) * eps            
         
@@ -71,7 +71,7 @@ class LogisticDiscretized(object):
         return (x - self.mean) / tf.exp(self.log_scale)
     
     def sample(self, eps=None):
-        if eps is not None:
+        if eps is None:
             eps_unif = tf.keras.backend.random_uniform(shape=self.mean.get_shape())
             eps = tf.math.log(eps_unif) - tf.math.log(1. - eps_unif)
         return self.mean + tf.exp(self.log_scale) * eps            

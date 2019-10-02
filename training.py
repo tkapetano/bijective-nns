@@ -15,8 +15,8 @@ from time import time
 
 NUM_OF_LABELS = 10
 BATCH_SIZE = 128
-INPUT_SHAPE=[28,28,1]
-FACTOR =  INPUT_SHAPE[0] * INPUT_SHAPE[1] * INPUT_SHAPE[2] * tf.math.log(2.)
+INPUT_SHAPE = [28,28,1]
+FACTOR = INPUT_SHAPE[0] * INPUT_SHAPE[1] * INPUT_SHAPE[2] * tf.math.log(2.)
 LOSS = tf.keras.losses.SparseCategoricalCrossentropy()
 
 def prepare_mnist_dataset():
