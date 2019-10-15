@@ -21,7 +21,7 @@ LOSS = tf.keras.losses.SparseCategoricalCrossentropy()
 
 def prepare_mnist_dataset():
     """Loads the MNIST dataset, dequantizes, rescales to [0,1], shuffles 
-        and batches it to return     a training and a test dataset 
+        and batches it to return a training and a test dataset 
         of type tf.data.Dataset.    
     """
     (train_images, train_labels), (test_images, test_labels) = tf.keras.datasets.mnist.load_data()

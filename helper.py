@@ -42,7 +42,7 @@ class GaussianIsotrop(object):
     def logp(self, x):
         log2pi = tf.math.log(2 * np.pi)
         logp_val = -0.5 * ((x - self.mean) ** 2. * tf.exp(-2. * self.log_std) 
-                    + 2. * self.log_std + log2pi)
+                    + 2. * self.log_std + log2pi + 1e-10)
         return tf.reduce_sum(logp_val, axis=[1,2,3])
     
     def eps_recon(self, x):

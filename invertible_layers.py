@@ -151,7 +151,7 @@ class CouplingLayer(tf.keras.layers.Layer):
                                    self.kernel_size, 
                                    name='conv3',
                                    padding='same', 
-                                   kernel_initializer='zeros', 
+                                   #kernel_initializer='zeros', 
                                    dtype=DTYPE)
         super(CouplingLayer, self).build(input_shape)
                                                
@@ -163,7 +163,7 @@ class CouplingLayer(tf.keras.layers.Layer):
         intermediate = self.conv3(self.conv2(self.conv1(x_a)))
         bias = intermediate[:, :, :, 0::2]
         s = intermediate[:, :, :, 1::2]
-        scale = tf.nn.sigmoid(s + 2.)
+        scale = tf.nn.sigmoid(s + 2.) + 1e-10
         y_b = x_b * scale + bias
         if self.ml:
             # add loss for max likelihood term
@@ -181,7 +181,7 @@ class CouplingLayer(tf.keras.layers.Layer):
         s = intermediate[:, :, :, 1::2]
         # backward pass
         #scale = tf.math.exp(s)
-        scale = tf.nn.sigmoid(s + 2.)
+        scale = tf.nn.sigmoid(s + 2.) + 1e-10
         x_b = (y_b - t) / scale
         return tf.concat([y_a,x_b], axis=3)
 
