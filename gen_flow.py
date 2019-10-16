@@ -64,6 +64,19 @@ class GenerativeFlow(tf.keras.Model):
             encoder.append(CouplingLayer(ml=True))
         return cls(input_shape, encoder, use_gauss)
         
+    @classmethod
+    def buildMnistNet(cls, input_shape, use_gauss=True, blocks=10, use_permutations=False):
+        encoder = []
+        encoder.append(Squeeze())
+        for i in range(blocks):
+            if use_permutations:
+                perm_layer = Conv1x1(ml=False, trainable=False)
+                encoder.append(perm_layer)       
+            else:
+                encoder.append(Conv1x1(ml=True))
+            encoder.append(CouplingLayer(ml=True))
+        return cls(input_shape, encoder, use_gauss)
+        
         
         
 #    
@@ -92,6 +105,19 @@ def generate_data(batch_size):
 
 
         
+def training_mnist(model, dataset, epochs):
+    optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
+    for epoch in range(epochs):
+        for batch, _ in dataset:
+            with tf.GradientTape() as tape:
+                z = model(batch)
+                log_det = sum(model.losses)
+                log_prior = tf.reduce_mean(model.dist.logp(z))
+                loss_value =  - log_prior - log_det 
+                print('Epoch {} has a NLL of {}'.format(epoch+1, loss_value))
+            grads = tape.gradient(loss_value, model.trainable_variables)
+            optimizer.apply_gradients(zip(grads, model.trainable_variables))        
+
 def training(model, dataset, epochs):
     optimizer = tf.keras.optimizers.Adam(learning_rate=0.01)
     for epoch in range(epochs):
