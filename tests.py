@@ -106,17 +106,20 @@ class TestCaseLayers(unittest.TestCase):
         [loss_acn] = self.actn.losses
         loss_expected = 0.0
         self.assertEqual(loss_expected, loss_acn.numpy())
+        print(loss_acn.numpy())
 
         self.conv1x1(inputs)
         [loss_conv] = self.conv1x1.losses
         # not exactly zero because the randomly initialized orthogonal matrix
         # has only det = 1 up to a small error
         self.assertLessEqual(L2NORM(loss_expected, loss_conv.numpy()), 1e-6)
+        print(loss_conv.numpy())
         
-        loss_expected =  4. * tf.math.log(tf.nn.sigmoid(2.))
+        loss_expected =  4. * tf.math.log(tf.nn.sigmoid(2.) + 1e-10)
         self.coupling(inputs)
         [loss_coupling] = self.coupling.losses
         self.assertLessEqual(L2NORM(loss_expected, loss_coupling.numpy()), 1e-6)
+        print(loss_coupling.numpy())
         
         # mean and log_var are initialized with zeros, hence loss boils down to 
         # log det of density of standard normal
@@ -126,6 +129,7 @@ class TestCaseLayers(unittest.TestCase):
         factor =  float(dims[1] * dims[2] * dims[3]) / 2.
         loss_expected = -0.5 * factor * (1. ** 2. + tf.math.log(2. * np.pi))
         self.assertEqual(loss_expected.numpy(), loss_split.numpy())
+        print(loss_split.numpy())
         
         inputs = 2. * tf.ones([4, 2, 2, 2])
         self.split(inputs)

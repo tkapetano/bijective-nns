@@ -12,7 +12,7 @@ Collection of invertable layer architectures:
 
 from __future__ import absolute_import, division, print_function, unicode_literals
 import tensorflow as tf
-from helper import int_shape, split_along_channels, GaussianIsotrop, LogisticDiscretized
+from helper import int_shape, split_along_channels, GaussianIsotrop, LogisticDist
 
 DTYPE = 'float32'
 
@@ -85,12 +85,18 @@ class Actnorm(tf.keras.layers.Layer):
     def invert(self, outputs):
         return (outputs - self.bias) / self.scale 
         
+    def compute_output_shape(self, input_shape):
+        return input_shape
+        
         
         
 class Conv1x1(tf.keras.layers.Layer):
     """Invertible 1x1 convolutional layer transforms a generalized. learnable
     permutation of channels. Prepares flow for a coupling layer. 
     (cf. Kingma and Dhariwal, 2018)
+    Can be easily made a simple permutation of channels by setting the 
+    layer to non-trainable - use ml=False to save computations as log_det 
+    is zero in this case. 
     # Output shape:  Same shape as input.
     """
     def __init__(self, name='conv1x1', ml=True, **kwargs):
@@ -118,6 +124,9 @@ class Conv1x1(tf.keras.layers.Layer):
         w_inv = tf.linalg.inv(self.w_mat)
         w_filter = tf.reshape(w_inv, [1,1, self.channels, self.channels])
         return tf.nn.conv2d(outputs, w_filter, [1,1,1,1], 'SAME')
+        
+    def compute_output_shape(self, input_shape):
+        return input_shape
         
 
 class CouplingLayer(tf.keras.layers.Layer):
@@ -151,7 +160,7 @@ class CouplingLayer(tf.keras.layers.Layer):
                                    self.kernel_size, 
                                    name='conv3',
                                    padding='same', 
-                                   #kernel_initializer='zeros', 
+                                   kernel_initializer='zeros', 
                                    dtype=DTYPE)
         super(CouplingLayer, self).build(input_shape)
                                                
@@ -184,6 +193,9 @@ class CouplingLayer(tf.keras.layers.Layer):
         scale = tf.nn.sigmoid(s + 2.) + 1e-10
         x_b = (y_b - t) / scale
         return tf.concat([y_a,x_b], axis=3)
+        
+    def compute_output_shape(self, input_shape):
+        return input_shape
 
         
 class SplitLayer(tf.keras.layers.Layer):
@@ -219,7 +231,7 @@ class SplitLayer(tf.keras.layers.Layer):
         if self.use_gauss:
             dist = GaussianIsotrop(mean, log_std)
         else:
-            dist = LogisticDiscretized(mean, log_std)
+            dist = LogisticDist(mean, log_std)
         if self.ml:
             # add loss for max likelihood term
             log_det = dist.logp(x_b)
@@ -236,7 +248,7 @@ class SplitLayer(tf.keras.layers.Layer):
             if self.use_gauss:
                 dist = GaussianIsotrop(mean, log_std)
             else:
-                dist = LogisticDiscretized(mean, log_std)
+                dist = LogisticDist(mean, log_std)
             y_b = dist.sample(eps)
         return tf.concat([y_a, y_b], axis=3)
         

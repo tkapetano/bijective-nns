@@ -53,18 +53,17 @@ class GaussianIsotrop(object):
             eps = tf.keras.backend.random_normal(shape=self.mean.get_shape())
         return self.mean + tf.exp(self.log_std) * eps            
         
-class LogisticDiscretized(object):
+class LogisticDist(object):
     """A discretized logistic distribution that can be used for sampling and 
         calculating the log density.
     """
-    def __init__(self, mean, log_scale, bin_size=1./256.):
+    def __init__(self, mean, log_scale):
         self.mean = mean
         self.log_scale = log_scale
-        self.bin_size = bin_size
         
     def logp(self, x):
-        x = (x - self.mean) / self.log_scale
-        logp_val = tf.math.log(tf.nn.sigmoid(x + self.bin_size / self.log_scale) - tf.sigmoid(x) + 1e-7)
+        x = (x - self.mean) / (2.0 * tf.math.exp(self.log_scale + 1e-10))
+        logp_val = - self.log_scale - tf.math.log(tf.math.exp(x) + tf.math.exp(-x) + 1e-10)
         return tf.reduce_sum(logp_val, axis=[1,2,3])
         
     def eps_recon(self, x):
@@ -75,6 +74,7 @@ class LogisticDiscretized(object):
             eps_unif = tf.keras.backend.random_uniform(shape=self.mean.get_shape())
             eps = tf.math.log(eps_unif) - tf.math.log(1. - eps_unif)
         return self.mean + tf.exp(self.log_scale) * eps            
+
     
     
    
