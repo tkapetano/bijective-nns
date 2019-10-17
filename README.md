@@ -5,7 +5,7 @@ On-going project. I plan to add more functionality soon.
 So far:
 - 'invertible_layers.py' contains invertible layer architectures from recent publications (see references below)
 - 'blocks.py' provides examples of invertible building blocks / steps of flow
-- 'simple_model.py' showcases a toy model with training setup on the MNIST dataset
+- 'gen_flow.py' provides a generative flow model. 
 
 References:
 - D. P. Kingma and P. Dhariwal. Glow: Generative flow with invertible 1x1 convolutions. Advances in Neural Information Processing Systems. 2018.
