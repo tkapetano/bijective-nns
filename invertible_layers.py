@@ -45,9 +45,9 @@ class Squeeze(tf.keras.layers.Layer):
         return x
         
     def compute_output_shape(self, input_shape):
-        return (input_shape[1]/self.factor, 
-                input_shape[2]/self.factor, 
-                self.factor*self.factor*input_shape[3])
+        return (input_shape[-3]/self.factor, 
+                input_shape[-2]/self.factor, 
+                self.factor*self.factor*input_shape[-1])
     
 class Actnorm(tf.keras.layers.Layer):
     """Activation normalization layer uses an affine channelwise transformation to 
