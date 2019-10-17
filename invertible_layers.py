@@ -160,7 +160,7 @@ class CouplingLayer(tf.keras.layers.Layer):
                                    self.kernel_size, 
                                    name='conv3',
                                    padding='same', 
-                                   #kernel_initializer='zeros', 
+                                   kernel_initializer='zeros', 
                                    dtype=DTYPE)
         super(CouplingLayer, self).build(input_shape)
                                                

@@ -66,7 +66,7 @@ class GenerativeFlow(tf.keras.Model):
         return cls(input_shape, encoder, use_gauss)
         
     @classmethod
-    def buildMnistNet(cls, input_shape=(28, 28, 1), use_gauss=False, blocks=6, use_permutations=False):
+    def buildMnistNet(cls, input_shape=(28, 28, 1), use_gauss=False, blocks=5, use_permutations=False):
         encoder = []
         encoder.append(Squeeze())
         encoder.append(Squeeze())
@@ -76,10 +76,17 @@ class GenerativeFlow(tf.keras.Model):
                 encoder.append(perm_layer)       
             else:
                 encoder.append(Conv1x1(ml=True))
-            encoder.append(CouplingLayer(ml=True, filters=(64,64)))
+            encoder.append(CouplingLayer(ml=True, filters=(16,16)))
         return cls(input_shape, encoder, use_gauss)
         
-        
+    @classmethod
+    def buildMnistNet2(cls, input_shape=(28, 28, 1), use_gauss=False, blocks=5, use_permutations=False):
+        encoder = []
+        encoder.append(Squeeze())
+        encoder.append(Squeeze())
+        for i in range(blocks):
+            encoder.append(FlowstepACN(ml=True, filters=(8,8)))
+        return cls(input_shape, encoder, use_gauss)
         
 #    
 #inputs = tf.ones(shape=(1,1,1,2))

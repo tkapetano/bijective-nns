@@ -18,11 +18,11 @@ class FlowstepACN(tf.keras.layers.Layer):
         a 1x1 convolution and an affine coupling layer transformation.
         # Output shape: Same shape as input.
     """
-    def __init__(self, name='flowstep_actnorm', ml=True, **kwargs):
+    def __init__(self, name='flowstep_actnorm', ml=True, filters=(64, 64), **kwargs):
         super(FlowstepACN, self).__init__(name=name, **kwargs)
         self.acn = Actnorm(ml=ml)
         self.conv1x1 = Conv1x1(ml=ml)
-        self.coupling = CouplingLayer(ml=ml)
+        self.coupling = CouplingLayer(ml=ml, filters=filters)
         
     def call(self, inputs):
         y = self.acn(inputs)
@@ -72,8 +72,8 @@ class FlowstepSqueeze(FlowstepACN):
     """
     squeeze = Squeeze()
     
-    def __init__(self, name='flowstep_squeeze', ml=True, **kwargs):
-        super(FlowstepSqueeze, self).__init__(name=name, ml=ml, **kwargs)
+    def __init__(self, name='flowstep_squeeze', ml=True,filters=(64,64), **kwargs):
+        super(FlowstepSqueeze, self).__init__(name=name, ml=ml, filters=filters, **kwargs)
         
                
     def call(self, inputs):
