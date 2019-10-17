@@ -15,7 +15,7 @@ from helper import int_shape, split_along_channels, GaussianIsotrop, LogisticDis
 from glow import Encoder, GlowNet
 
 
-NAME = 's05'
+NAME = 's13'
 
 class GenerativeFlow(tf.keras.Model):
     def __init__(self, input_shape, encoder, use_gauss=True, name='genflow', ml=True, **kwargs):
@@ -30,7 +30,8 @@ class GenerativeFlow(tf.keras.Model):
         if use_gauss:
             self.dist = GaussianIsotrop(zeros, zeros)
         else:
-            self.dist = LogisticDist(zeros, zeros)
+            ones = tf.ones(shape=self.out_shape)
+            self.dist = LogisticDist(zeros, ones)
         
     def call(self, inputs):
         for layer in self.encoder:
@@ -47,8 +48,8 @@ class GenerativeFlow(tf.keras.Model):
         z = tf.reshape(z, shape=[1] + list(self.out_shape))
         # forward pass to fill the losses with logdet values
         self.call(self.invert(z))
-        logdet = sum(self.losses)
-        z /= logdet
+        logdet = sum(tf.math.exp(self.losses))
+        #z /= logdet
         x = self.invert(z)
         return x
         
@@ -61,7 +62,7 @@ class GenerativeFlow(tf.keras.Model):
                 encoder.append(perm_layer)       
             else:
                 encoder.append(Conv1x1(ml=True))
-            encoder.append(CouplingLayer(ml=True))
+            encoder.append(CouplingLayer(ml=True, filters=(32,32)))
         return cls(input_shape, encoder, use_gauss)
         
     @classmethod
@@ -147,6 +148,18 @@ def re_shape(tensor):
         y_vals.append(tensor[i, 0, 0, 1])
     return x_vals, y_vals
     
+def plot_dist_samples(dist):
+    points = [dist.sample() for i in range(batch_size)]
+    x_vals = []
+    y_vals = []
+    for p in points:
+        x_vals.append(p[ 0, 0, 0])
+        y_vals.append(p[ 0, 0, 1])
+    fig = plt.figure()
+    plt.plot(x_vals, y_vals, 'ro')
+    plt.show()
+    fig.savefig('dist' + '_generate.png')
+    
     
 def test_sampling(model):
     images = [model.sample() for i in range(4)]
@@ -175,6 +188,7 @@ def show_space_contraction(model, all_layers=False):
     horizontal_lines = []
     vertical_lines = []
     line = np.linspace(-2.0, 2.0, 256)
+    #line = np.linspace(-16.0, 16.0, 256)
     line = tf.cast(tf.reshape(line, shape=(256,1,1,1)), 'float32')
     for i in range(3):
         y_plus = tf.zeros(shape=line.get_shape(), dtype=tf.dtypes.float32) + float(i)
@@ -220,12 +234,18 @@ def show_space_contraction(model, all_layers=False):
             axes[1].plot(x, y, 'ro--', linewidth=2, markersize=3)  
         
     plt.show()
-    fig.savefig(NAME + '_contract_all_back.png')
+    if all_layers:
+        name_add = '_all'
+    else:
+        name_add = ''
+    
+    fig.savefig(NAME + name_add + '_contract_back.png')
     
 def run():
     dataset = [generate_data(batch_size) for i in range(100)]
-    model = GenerativeFlow.buildSimpleNet(input_shape=(1, 1, 2), blocks=10, use_permutations=True)
+    model = GenerativeFlow.buildSimpleNet(input_shape=(1, 1, 2), use_gauss=False, blocks=3, use_permutations=False)
     training(model, dataset, 20)
     sample_points(model)
     show_space_contraction(model)
+    show_space_contraction(model, True)
     

@@ -57,25 +57,23 @@ class LogisticDist(object):
     """A discretized logistic distribution that can be used for sampling and 
         calculating the log density.
     """
-    def __init__(self, mean, log_scale):
+    def __init__(self, mean, scale):
         self.mean = mean
-        self.log_scale = log_scale
+        self.scale = scale
         
     def logp(self, x):
-        #x = (x - self.mean) / (2.0 * tf.math.exp(self.log_scale + 1e-10))
-        #logp_val = - self.log_scale - tf.math.log(tf.math.exp(x) + tf.math.exp(-x) + 1e-10)
-        logp_val = - tf.math.log(1 + tf.math.exp(x)) - tf.math.log(1 + tf.math.exp(-x))        
+        x = (x - self.mean) / (2.0 * self.scale)
+        logp_val = - tf.math.log( self.scale + 1e-10) - tf.math.log(tf.math.exp(x) + tf.math.exp(-x) + 1e-10)
+        #logp_val = - tf.math.log(1 + tf.math.exp(x + 1e-10)) - tf.math.log(1 + tf.math.exp(-x + 1e-10))        
         return tf.reduce_sum(logp_val, axis=[1,2,3])
         
     def eps_recon(self, x):
-        return (x - self.mean) / tf.exp(self.log_scale)
+        return (x - self.mean) / self.scale
     
     def sample(self, eps=None):
         if eps is None:
             eps_unif = tf.keras.backend.random_uniform(shape=self.mean.get_shape())
             eps = tf.math.log(eps_unif) - tf.math.log(1. - eps_unif)
-        return self.mean + tf.exp(self.log_scale) * eps            
+        return self.mean + self.scale * eps            
 
-    
-    
-   
+
