@@ -62,8 +62,9 @@ class LogisticDist(object):
         self.log_scale = log_scale
         
     def logp(self, x):
-        x = (x - self.mean) / (2.0 * tf.math.exp(self.log_scale + 1e-10))
-        logp_val = - self.log_scale - tf.math.log(tf.math.exp(x) + tf.math.exp(-x) + 1e-10)
+        #x = (x - self.mean) / (2.0 * tf.math.exp(self.log_scale + 1e-10))
+        #logp_val = - self.log_scale - tf.math.log(tf.math.exp(x) + tf.math.exp(-x) + 1e-10)
+        logp_val = - tf.math.log(1 + tf.math.exp(x)) - tf.math.log(1 + tf.math.exp(-x))        
         return tf.reduce_sum(logp_val, axis=[1,2,3])
         
     def eps_recon(self, x):

@@ -45,8 +45,8 @@ class Squeeze(tf.keras.layers.Layer):
         return x
         
     def compute_output_shape(self, input_shape):
-        return (input_shape[-3]/self.factor, 
-                input_shape[-2]/self.factor, 
+        return (int(input_shape[-3]/self.factor), 
+                int(input_shape[-2]/self.factor), 
                 self.factor*self.factor*input_shape[-1])
     
 class Actnorm(tf.keras.layers.Layer):
@@ -254,5 +254,5 @@ class SplitLayer(tf.keras.layers.Layer):
         
     def compute_output_shape(self, input_shape):
         input_shape[-1] /= 2
-        return [input_shape] * 3
+        return [int(input_shape)] * 3
         

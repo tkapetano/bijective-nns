@@ -71,11 +71,11 @@ class GenerativeFlow(tf.keras.Model):
         encoder.append(Squeeze())
         for i in range(blocks):
             if use_permutations:
-                perm_layer = Conv1x1(ml=False, trainable=False)
+                perm_layer = Conv1x1(ml=False, filters=(64,64), trainable=False)
                 encoder.append(perm_layer)       
             else:
                 encoder.append(Conv1x1(ml=True))
-            encoder.append(CouplingLayer(ml=True))
+            encoder.append(CouplingLayer(ml=True), filters=(64,64))
         return cls(input_shape, encoder, use_gauss)
         
         
