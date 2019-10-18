@@ -10,7 +10,7 @@ import tensorflow as tf
 import numpy as np
 from invertible_layers import Squeeze, Actnorm, Conv1x1, CouplingLayer, SplitLayer
 from blocks import FlowstepACN, FlowstepSqueeze
-from helper import int_shape, split_along_channels
+from helper import int_shape, split_along_channels, lu_decomposition, DetOne
 from glow import Encoder, GlowNet
 
 import unittest
@@ -26,6 +26,7 @@ class TestCaseLayers(unittest.TestCase):
         self.squeeze = Squeeze()
         self.actn = Actnorm(ml=ml)        
         self.conv1x1 = Conv1x1(ml=ml)
+        self.conv_lu =  Conv1x1(ml=ml, lu_decom=True)
         self.coupling = CouplingLayer(ml=ml)
         self.split = SplitLayer(ml=ml)
         
@@ -42,6 +43,9 @@ class TestCaseLayers(unittest.TestCase):
             
         convolved = self.conv1x1(inputs)
         self.assertEqual([4,2,2,3], int_shape(convolved))
+        convolved_lu = self.conv_lu(inputs)
+        self.assertEqual([4,2,2,3], int_shape(convolved_lu))
+        
         
         coupled = self.coupling(squeezed)
         self.assertEqual([4,1,1,12], int_shape(coupled))
@@ -85,6 +89,9 @@ class TestCaseLayers(unittest.TestCase):
         convolved = self.conv1x1(inputs)
         deconvolved = self.conv1x1.invert(convolved)
         self.assertLessEqual(L2NORM(inputs, deconvolved), 1e-5)
+        convolved_lu = self.conv_lu(inputs)
+        deconvolved_lu = self.conv_lu.invert(convolved_lu)
+        self.assertLessEqual(L2NORM(inputs, deconvolved_lu), 1e-5)
         
         coupled = self.coupling(squeezed)
         decoupled = self.coupling.invert(coupled)
@@ -106,20 +113,26 @@ class TestCaseLayers(unittest.TestCase):
         [loss_acn] = self.actn.losses
         loss_expected = 0.0
         self.assertEqual(loss_expected, loss_acn.numpy())
-        print(loss_acn.numpy())
+        #print(loss_acn.numpy())
 
         self.conv1x1(inputs)
         [loss_conv] = self.conv1x1.losses
         # not exactly zero because the randomly initialized orthogonal matrix
         # has only det = 1 up to a small error
         self.assertLessEqual(L2NORM(loss_expected, loss_conv.numpy()), 1e-6)
-        print(loss_conv.numpy())
+        #print(loss_conv.numpy())
+        
+        self.conv_lu(inputs)
+        [loss_conv_lu] = self.conv_lu.losses
+        # not exactly zero because the randomly initialized orthogonal matrix
+        # has only det = 1 up to a small error
+        self.assertLessEqual(L2NORM(loss_expected, loss_conv_lu.numpy()), 1e-6)
         
         loss_expected =  4. * tf.math.log(tf.nn.sigmoid(2.) + 1e-10)
         self.coupling(inputs)
         [loss_coupling] = self.coupling.losses
         self.assertLessEqual(L2NORM(loss_expected, loss_coupling.numpy()), 1e-6)
-        print(loss_coupling.numpy())
+        #print(loss_coupling.numpy())
         
         # mean and log_var are initialized with zeros, hence loss boils down to 
         # log det of density of standard normal
@@ -129,7 +142,7 @@ class TestCaseLayers(unittest.TestCase):
         factor =  float(dims[1] * dims[2] * dims[3]) / 2.
         loss_expected = -0.5 * factor * (1. ** 2. + tf.math.log(2. * np.pi))
         self.assertEqual(loss_expected.numpy(), loss_split.numpy())
-        print(loss_split.numpy())
+        #print(loss_split.numpy())
         
         inputs = 2. * tf.ones([4, 2, 2, 2])
         self.split(inputs)
@@ -277,12 +290,28 @@ class TestCaseHelper(unittest.TestCase):
     Testing the module 'helper.py'
     """
          
+    def setUp(self):
+        self.con = DetOne(3)
+        
     def testShapes(self):
         inputs = tf.ones([2, 2, 2, 4])
         out_1, out_2 = split_along_channels(inputs)
         self.assertEqual(out_1.shape, out_2.shape)
         self.assertEqual([2,2,2,2], out_1.shape)
         
+    def testLUDecomposition(self):
+        w = tf.keras.backend.random_normal(shape=(3,3))
+        p, l, u, diag = lu_decomposition(w)
+        # Correct composition yields W = P * L * (U + diag)
+        u_plus = tf.linalg.set_diag(u, diag)   
+        l_with_diag = tf.linalg.set_diag(l, tf.ones(shape=diag.shape))  
+        w_recon = tf.matmul(p, tf.matmul(l_with_diag, u_plus))
+        self.assertLessEqual(L2NORM(w, w_recon), 1e-6)
+        
+    def testDetOneConstraint(self):
+        s = tf.constant([1., 2., 3.])
+        s_con = self.con(s)
+        self.assertLessEqual(1. - tf.reduce_prod(s_con).numpy(), 1e-6)
         
 if __name__ == '__main__':
     unittest.main()

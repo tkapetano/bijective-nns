@@ -77,3 +77,60 @@ class LogisticDist(object):
         return self.mean + self.scale * eps            
 
 
+def lu_decomposition(w_mat):
+    shape = int_shape(w_mat)
+    lu, p_inv = tf.linalg.lu(w_mat)
+    p_mat = np.zeros(shape=shape, dtype='float32')
+    for num, index in enumerate(p_inv.numpy()):
+        p_mat[index, num] = 1
+    p_mat = tf.constant(p_mat)    
+    l_operator = tf.linalg.LinearOperatorLowerTriangular(lu)
+    diag = l_operator.diag_part() 
+    l_mat = l_operator.to_dense()
+    
+    u_mat = lu - l_mat       
+    #l_mat = tf.linalg.set_diag(l_mat, tf.ones(shape=(shape[0],)))    
+    #u_mat = tf.linalg.set_diag(u_mat, diag)    
+    
+    return p_mat, l_mat, u_mat, diag
+
+
+class DetOne(tf.keras.constraints.Constraint):
+    def __init__(self, channel_dim):
+        self.channel_dim = channel_dim
+        
+    def __call__(self, s):
+        # compute geometric mean for rescaling
+        normalizer = tf.math.abs(tf.reduce_prod(s))
+        #print('Normal: ' + str(normalizer))
+        if normalizer == 0:
+            scale = 1.
+        else:
+            scale = tf.math.pow(normalizer, 1. / float(self.channel_dim))
+        #print('Scale: '+ str(scale))
+        return s / scale
+        
+class LowerTriangularlWeights(tf.keras.constraints.Constraint):
+    """Constrains the weights to be lower triangular, with ones on the diagonal.
+    """
+    def __init__(self, channel_dim):
+        self.channel_dim = channel_dim
+        
+    def __call__(self, w):
+        operator = tf.linalg.LinearOperatorLowerTriangular(w)
+        w = operator.to_dense()
+        return tf.linalg.set_diag(w, tf.ones(shape=(self.channel_dim,)))    
+        
+class UpperTriangularlWeights(tf.keras.constraints.Constraint):
+    """Constrains the weights to be lower triangular, with ones on the diagonal.
+    """
+    def __init__(self, channel_dim):
+        self.channel_dim = channel_dim
+        
+    def __call__(self, w):
+        w = tf.linalg.transpose(w)
+        operator = tf.linalg.LinearOperatorLowerTriangular(w)
+        w = operator.to_dense()
+        w = tf.linalg.transpose(w)
+        return tf.linalg.set_diag(w, tf.zeros(shape=(self.channel_dim,)))    
+        

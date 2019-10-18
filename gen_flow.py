@@ -15,7 +15,7 @@ from helper import int_shape, split_along_channels, GaussianIsotrop, LogisticDis
 from glow import Encoder, GlowNet
 
 
-NAME = 's14'
+NAME = 's15'
 
 class GenerativeFlow(tf.keras.Model):
     def __init__(self, input_shape, encoder, use_gauss=True, name='genflow', ml=True, **kwargs):
@@ -47,8 +47,8 @@ class GenerativeFlow(tf.keras.Model):
         z = self.dist.sample()
         z = tf.reshape(z, shape=[1] + list(self.out_shape))
         # forward pass to fill the losses with logdet values
-        self.call(self.invert(z))
-        logdet = sum(tf.math.exp(self.losses))
+        #self.call(self.invert(z))
+        #logdet = sum(tf.math.exp(self.losses))
         #z /= logdet
         x = self.invert(z)
         return x
@@ -61,7 +61,7 @@ class GenerativeFlow(tf.keras.Model):
                 perm_layer = Conv1x1(ml=False, trainable=False)
                 encoder.append(perm_layer)       
             else:
-                encoder.append(Conv1x1(ml=True))
+                encoder.append(Conv1x1(ml=True, lu_decom=True))
             encoder.append(CouplingLayer(ml=True, filters=(32,32)))
         return cls(input_shape, encoder, use_gauss)
         
@@ -75,7 +75,7 @@ class GenerativeFlow(tf.keras.Model):
                 perm_layer = Conv1x1(ml=False, trainable=False)
                 encoder.append(perm_layer)       
             else:
-                encoder.append(Conv1x1(ml=True))
+                encoder.append(Conv1x1(ml=True, lu_decom=True))
             encoder.append(CouplingLayer(ml=True, filters=(12,12)))
         return cls(input_shape, encoder, use_gauss)
         
@@ -138,7 +138,7 @@ def training_mnist(model, dataset, epochs, trial_num):
             grads = tape.gradient(loss_value, model.trainable_variables)
             optimizer.apply_gradients(zip(grads, model.trainable_variables))  
         if epoch % 5 == 0:
-            model.save_weigths('./' + str(trial_num) + '_' + str(epoch) )
+            model.save_weights('./' + str(trial_num) + '_' + str(epoch) )
             test_sampling(model, trial_num, epoch)
             
 
@@ -255,7 +255,7 @@ def show_space_contraction(model, all_layers=False):
     
 def run():
     dataset = [generate_data(batch_size) for i in range(100)]
-    model = GenerativeFlow.buildSimpleNet(input_shape=(1, 1, 2), use_gauss=False, blocks=3, use_permutations=False)
+    model = GenerativeFlow.buildSimpleNet(input_shape=(1, 1, 2), use_gauss=True, blocks=3, use_permutations=False)
     training(model, dataset, 20)
     sample_points(model)
     show_space_contraction(model)

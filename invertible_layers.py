@@ -12,7 +12,9 @@ Collection of invertable layer architectures:
 
 from __future__ import absolute_import, division, print_function, unicode_literals
 import tensorflow as tf
-from helper import int_shape, split_along_channels, GaussianIsotrop, LogisticDist
+from helper import int_shape, split_along_channels, GaussianIsotrop, \
+                    LogisticDist, lu_decomposition, DetOne, \
+                    LowerTriangularlWeights, UpperTriangularlWeights
 
 DTYPE = 'float32'
 
@@ -99,30 +101,77 @@ class Conv1x1(tf.keras.layers.Layer):
     is zero in this case. 
     # Output shape:  Same shape as input.
     """
-    def __init__(self, name='conv1x1', ml=True, **kwargs):
+    def __init__(self, name='conv1x1', ml=True, lu_decom=False, **kwargs):
         super(Conv1x1, self).__init__(name=name, **kwargs)
         self.ml = ml
+        self.lu = lu_decom
         
     def build(self, input_shape):
         self.channels = input_shape[-1]
-        self.w_mat = self.add_weight(name='w_mat',
+        if self.lu:
+            self.w_mat = self.add_weight(name='w_mat',
                                  shape=(self.channels, self.channels),
                                  initializer='orthogonal',
-                                 trainable=True,
-                                 #constraint=tf.keras.constraints.UnitNorm(axis=[0,1]),
+                                 trainable=False,
                                  dtype=DTYPE)
+            p, l, u, s = lu_decomposition(self.w_mat)
+            self.p_mat = self.add_weight(name='p_mat',
+                                 shape=p.get_shape(),
+                                 initializer=tf.keras.initializers.Constant(value=p.numpy()),
+                                 trainable=False,
+                                 dtype=DTYPE)
+            self.l_mat = self.add_weight(name='l_mat',
+                                 shape=l.get_shape(),
+                                 initializer=tf.keras.initializers.Constant(value=l.numpy()),
+                                 trainable=True,
+                                 constraint=LowerTriangularlWeights(self.channels),
+                                 dtype=DTYPE)
+            self.u_mat = self.add_weight(name='u_mat',
+                                 shape=u.get_shape(),
+                                 initializer=tf.keras.initializers.Constant(value=u.numpy()),
+                                 trainable=True,
+                                 constraint=UpperTriangularlWeights(self.channels),
+                                 dtype=DTYPE)
+            self.s = self.add_weight(name='s',
+                                 shape=s.get_shape(),
+                                 initializer=tf.keras.initializers.Constant(value=s.numpy()),
+                                 trainable=True,
+                                 constraint=DetOne(self.channels),
+                                 dtype=DTYPE)
+        else:
+            self.w_mat = self.add_weight(name='w_mat',
+                             shape=(self.channels, self.channels),
+                             initializer='orthogonal',
+                             trainable=True,
+                             #constraint=tf.keras.constraints.UnitNorm(axis=[0,1]),
+                             dtype=DTYPE)
+                                 
         super(Conv1x1, self).build(input_shape)
                                                
     def call(self, inputs):
         if self.ml:
             w, h = int_shape(inputs)[-3:-1]
-            log_det = w * h * tf.math.log(tf.math.abs(tf.linalg.det(self.w_mat)))
+            if self.lu:
+                log_det = w * h * tf.math.log(tf.math.abs(tf.reduce_prod(self.s)) + 1e-10)
+            else:
+                log_det = w * h * tf.math.log(tf.math.abs(tf.linalg.det(self.w_mat)))
             self.add_loss(log_det)
-        w_filter = tf.reshape(self.w_mat, [1,1, self.channels, self.channels])
+        if self.lu:
+            u_plus =  tf.linalg.set_diag(self.u_mat, self.s)
+            w_mat = tf.matmul(self.p_mat, tf.matmul(self.l_mat,  u_plus))
+            #print(tf.math.abs(tf.linalg.det(w_mat)))
+        else:
+            w_mat = self.w_mat
+        w_filter = tf.reshape(w_mat, [1,1, self.channels, self.channels])
         return tf.nn.conv2d(inputs, w_filter, [1,1,1,1], 'SAME')
                
     def invert(self, outputs):
-        w_inv = tf.linalg.inv(self.w_mat)
+        if self.lu:
+            u_plus =  tf.linalg.set_diag(self.u_mat, self.s)
+            w_mat = tf.matmul(self.p_mat, tf.matmul(self.l_mat,  u_plus))
+        else:
+            w_mat = self.w_mat
+        w_inv = tf.linalg.inv(w_mat)
         w_filter = tf.reshape(w_inv, [1,1, self.channels, self.channels])
         return tf.nn.conv2d(outputs, w_filter, [1,1,1,1], 'SAME')
         
