@@ -76,7 +76,7 @@ class GenerativeFlow(tf.keras.Model):
                 encoder.append(perm_layer)       
             else:
                 encoder.append(Conv1x1(ml=True))
-            encoder.append(CouplingLayer(ml=True, filters=(16,16)))
+            encoder.append(CouplingLayer(ml=True, filters=(12,12)))
         return cls(input_shape, encoder, use_gauss)
         
     @classmethod
