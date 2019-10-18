@@ -15,7 +15,7 @@ from helper import int_shape, split_along_channels, GaussianIsotrop, LogisticDis
 from glow import Encoder, GlowNet
 
 
-NAME = 's13'
+NAME = 's14'
 
 class GenerativeFlow(tf.keras.Model):
     def __init__(self, input_shape, encoder, use_gauss=True, name='genflow', ml=True, **kwargs):
@@ -96,7 +96,18 @@ class GenerativeFlow(tf.keras.Model):
 #print(input_recon)
 batch_size = 256
 
-
+    
+def test_sampling(model, trial_num=0, epoch=0):
+    images = [model.sample() for i in range(4)]
+    fig, axes = plt.subplots(1, 4, figsize=(16,4))
+    axes = axes.flatten()
+    for img, ax in zip(images, axes):
+        ax.imshow(tf.reshape(img, [28,28]))
+        ax.axis('off')
+    plt.tight_layout()
+    plt.show()
+    fig.savefig('model' + str(trial_num) + '_gen_samples_epoch_' + str(epoch) +'.png')
+    
 
 def generate_data(batch_size):
     shape = (batch_size, 1, 1, 1)
@@ -114,7 +125,7 @@ def generate_data(batch_size):
 
 
         
-def training_mnist(model, dataset, epochs):
+def training_mnist(model, dataset, epochs, trial_num):
     optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
     for epoch in range(epochs):
         for batch, _ in dataset:
@@ -125,7 +136,11 @@ def training_mnist(model, dataset, epochs):
                 loss_value =  - log_prior - log_det 
                 print('Epoch {} has a NLL of {}'.format(epoch+1, loss_value))
             grads = tape.gradient(loss_value, model.trainable_variables)
-            optimizer.apply_gradients(zip(grads, model.trainable_variables))        
+            optimizer.apply_gradients(zip(grads, model.trainable_variables))  
+        if epoch % 5 == 0:
+            model.save_weigths('./' + str(trial_num) + '_' + str(epoch) )
+            test_sampling(model, trial_num, epoch)
+            
 
 def training(model, dataset, epochs):
     optimizer = tf.keras.optimizers.Adam(learning_rate=0.01)
@@ -167,17 +182,7 @@ def plot_dist_samples(dist):
     plt.show()
     fig.savefig('dist' + '_generate.png')
     
-    
-def test_sampling(model):
-    images = [model.sample() for i in range(4)]
-    fig, axes = plt.subplots(1, 4, figsize=(16,4))
-    axes = axes.flatten()
-    for img, ax in zip(images, axes):
-        ax.imshow(tf.reshape(img, [28,28]))
-        ax.axis('off')
-    plt.tight_layout()
-    plt.show()
-    
+
 def sample_points(model):
     points = [model.sample() for i in range(batch_size)]
     x_vals = []

@@ -109,6 +109,7 @@ class Conv1x1(tf.keras.layers.Layer):
                                  shape=(self.channels, self.channels),
                                  initializer='orthogonal',
                                  trainable=True,
+                                 constraint=tf.keras.constraints.UnitNorm(axis=[0,1]),
                                  dtype=DTYPE)
         super(Conv1x1, self).build(input_shape)
                                                
