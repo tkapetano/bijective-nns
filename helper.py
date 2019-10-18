@@ -128,9 +128,9 @@ class UpperTriangularlWeights(tf.keras.constraints.Constraint):
         self.channel_dim = channel_dim
         
     def __call__(self, w):
-        w = tf.linalg.transpose(w)
+        w = tf.linalg.matrix_transpose(w)
         operator = tf.linalg.LinearOperatorLowerTriangular(w)
         w = operator.to_dense()
-        w = tf.linalg.transpose(w)
+        w = tf.linalg.matrix_transpose(w)
         return tf.linalg.set_diag(w, tf.zeros(shape=(self.channel_dim,)))    
         
