@@ -1,0 +1,2 @@
+model_checkpoint_path: "trial_1_epoch_40"
+all_model_checkpoint_paths: "trial_1_epoch_40"

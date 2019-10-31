@@ -50,6 +50,26 @@ class Squeeze(tf.keras.layers.Layer):
         return (int(input_shape[-3]/self.factor), 
                 int(input_shape[-2]/self.factor), 
                 self.factor*self.factor*input_shape[-1])
+                
+class FlipChannels(tf.keras.layers.Layer):
+    """Squeeze layer transformation trades spatial dimensions for a greater number of channels. 
+    No trainable parameters.
+    # Input shape: Requires even spatial dimensions. 
+    # Output shape: If input is a h x w x c tensor, output shape is h/2 x w/2 x 4*c.
+    """
+    def __init__(self, name='flipchannel',  **kwargs):
+        super(FlipChannels, self).__init__(name=name, **kwargs)
+                                               
+    def call(self, inputs):
+        x_a, x_b = split_along_channels(inputs)
+        return tf.concat([x_b, x_a], axis=-1)
+      
+    def invert(self, outputs):
+        x_a, x_b = split_along_channels(outputs)
+        return tf.concat([x_b, x_a], axis=-1)
+        
+    def compute_output_shape(self, input_shape):
+        return input_shape
     
 class Actnorm(tf.keras.layers.Layer):
     """Activation normalization layer uses an affine channelwise transformation to 
@@ -104,6 +124,8 @@ class Conv1x1(tf.keras.layers.Layer):
     def __init__(self, name='conv1x1', ml=True, lu_decom=False, **kwargs):
         super(Conv1x1, self).__init__(name=name, **kwargs)
         self.ml = ml
+        if lu_decom:
+            self.ml = False
         self.lu = lu_decom
         
     def build(self, input_shape):
@@ -195,22 +217,25 @@ class CouplingLayer(tf.keras.layers.Layer):
     def build(self, input_shape):        
         channels = input_shape[-1]
         self.conv1 = tf.keras.layers.Conv2D(self.filters[0], 
-                                   self.kernel_size, 
+                                   self.kernel_size,
                                    name='conv1',
                                    padding='same', 
                                    activation='relu',
+                                   kernel_regularizer=tf.keras.regularizers.l2(0.01),
                                    dtype=DTYPE)
         self.conv2 = tf.keras.layers.Conv2D(self.filters[1], 
                                    self.kernel_size, 
                                    name='conv2',
                                    padding='same', 
                                    activation='relu',
+                                   kernel_regularizer=tf.keras.regularizers.l2(0.01),
                                    dtype=DTYPE)
         self.conv3 = tf.keras.layers.Conv2D(channels, 
                                    self.kernel_size, 
                                    name='conv3',
                                    padding='same', 
                                    kernel_initializer='zeros', 
+                                   kernel_regularizer=tf.keras.regularizers.l2(0.01),
                                    dtype=DTYPE)
         super(CouplingLayer, self).build(input_shape)
                                                

@@ -62,9 +62,9 @@ class LogisticDist(object):
         self.scale = scale
         
     def logp(self, x):
-        x = (x - self.mean) / (2.0 * self.scale)
-        logp_val = - tf.math.log( self.scale + 1e-10) - tf.math.log(tf.math.exp(x) + tf.math.exp(-x) + 1e-10)
-        #logp_val = - tf.math.log(1 + tf.math.exp(x + 1e-10)) - tf.math.log(1 + tf.math.exp(-x + 1e-10))        
+        #x = (x - self.mean) / (2.0 * self.scale)
+        #logp_val = - tf.math.log( self.scale + 1e-10) - tf.math.log(tf.math.exp(x) + tf.math.exp(-x) + 1e-10)
+        logp_val = - tf.math.log(1 + tf.math.exp(x + 1e-10)) - tf.math.log(1 + tf.math.exp(-x + 1e-10))        
         return tf.reduce_sum(logp_val, axis=[1,2,3])
         
     def eps_recon(self, x):
@@ -128,9 +128,13 @@ class UpperTriangularlWeights(tf.keras.constraints.Constraint):
         self.channel_dim = channel_dim
         
     def __call__(self, w):
-        w = tf.linalg.matrix_transpose(w)
+        if tf.__version__ == '2.0.0-alpha0':
+            transpose = tf.linalg.transpose
+        else:
+            transpose = tf.linalg.matrix_transpose
+        w = transpose(w)
         operator = tf.linalg.LinearOperatorLowerTriangular(w)
         w = operator.to_dense()
-        w = tf.linalg.matrix_transpose(w)
+        w = transpose(w)
         return tf.linalg.set_diag(w, tf.zeros(shape=(self.channel_dim,)))    
         

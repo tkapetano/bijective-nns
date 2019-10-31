@@ -8,22 +8,21 @@ Created on Thu Aug 29 19:38:00 2019
 
 from __future__ import absolute_import, division, print_function, unicode_literals
 import tensorflow as tf
+import matplotlib.pyplot as plt
 
-from invertible_layers import SplitLayer
-from helper import int_shape
+from helper import int_shape, split_along_channels
 from blocks import FlowstepACN, FlowstepSqueeze
 
+
 class Encoder(tf.keras.layers.Layer):
-    def __init__(self, name='encoder', ml=True, use_gauss=True, blocks_per_level=[4,4], **kwargs):
+    def __init__(self, name='encoder', ml=False, blocks_per_level=[4,4], **kwargs):
         super(Encoder, self).__init__(name=name, **kwargs)
         self.level_1 = [FlowstepSqueeze(ml=ml)]
         for i in range(blocks_per_level[0]):
             self.level_1.append(FlowstepACN(ml=ml))
-        self.split_1 = SplitLayer(ml=ml, use_gauss=use_gauss)
         self.level_2 =  [FlowstepSqueeze(ml=ml)]
         for i in range(blocks_per_level[1]):
             self.level_2.append(FlowstepACN(ml=ml))
-        self.split_2 = SplitLayer(ml=ml, use_gauss=use_gauss)
           
     def call(self, inputs):
         shape = int_shape(inputs)
@@ -31,19 +30,18 @@ class Encoder(tf.keras.layers.Layer):
         y = inputs
         for block in self.level_1:
             y = block(y)
-        y, y_b, eps_1 = self.split_1(y)
+        y, y_b = split_along_channels(y)
         for block in self.level_2:
             y = block(y)
-        y_aa, y_ab, eps_2 = self.split_2(y)
-        return y_aa, y_ab, y_b, eps_1, eps_2
+        return y, y_b
           
-    def invert(self, z_a, z_ab, z_b, sample=False):    
-        shape = int_shape(z_a)
+    def invert(self, z, z_b):    
+        shape = int_shape(z)
         assert shape[-1] % 4 == 0
-        x = self.split_2.invert(z_a, z_ab, sample=sample)        
+        x = z
         for block in reversed(self.level_2):
             x = block.invert(x)
-        x = self.split_1.invert(x, z_b, sample=sample)
+        x = tf.concat([x,z_b], axis=-1)
         for block in reversed(self.level_1):
             x = block.invert(x)
         return x
@@ -52,68 +50,107 @@ class Encoder(tf.keras.layers.Layer):
         inputs = init_data_batch
         for block in self.level_1:
             inputs = block.data_dependent_init(inputs)
-        inputs, _, _ = self.split_1(inputs)
+        inputs, _ = split_along_channels(inputs)
         for block in self.level_2:
             inputs = block.data_dependent_init(inputs)
     
-    def compute_output_shapes(self, input_shape):
-        out_fst_level = [input_shape[-2]/2, input_shape[-2]/2, input_shape[-1]*2]
-        out_scd_level = [input_shape[-2]/4, input_shape[-2]/4, input_shape[-1]*4]
-        return 2*[out_scd_level] + 2*[out_fst_level] + [out_scd_level]
+    def compute_output_shape(self, input_shape):
+        out_fst_level = [int(input_shape[-2]/2), int(input_shape[-2]/2), int(input_shape[-1]*2)]
+        out_scd_level = [int(input_shape[-2]/4), int(input_shape[-2]/4), int(input_shape[-1]*8)]
+        return [out_fst_level, out_scd_level] 
         
 
   
-class GlowNet(tf.keras.Model):
-    def __init__(self, label_classes, input_shape, name='glownet', ml=True, use_gauss=True, **kwargs):
-        super(GlowNet, self).__init__(name=name, **kwargs)
+class IRevNet(tf.keras.Model):
+    def __init__(self, num_of_labels, input_shape, name='irevnet', ml=False, **kwargs):
+        super(IRevNet, self).__init__(name=name, **kwargs)
         self.ml = ml
-        self.encoder = Encoder(ml=ml, use_gauss=use_gauss)
-        self.classifier = tf.keras.models.Sequential([
-                                    tf.keras.layers.Flatten(),
-                                    tf.keras.layers.Dense(label_classes, activation='softmax')])
-        self.flatten =  tf.keras.layers.Flatten()
+        self.num_of_labels = num_of_labels
+      
+        self.encoder = Encoder(ml=ml, input_shape=input_shape)  
+        [self.level_1_out_shape, self.level_2_out_shape] = self.encoder.compute_output_shape(input_shape)
+        self.flatten_1 =  tf.keras.layers.Flatten()
+        self.flatten_2 = tf.keras.layers.Flatten()
+        out_dims = input_shape[0] * input_shape[1] * input_shape[2] - num_of_labels
         self.nuisance_classifier = tf.keras.models.Sequential([
-                                    tf.keras.layers.Dense(256, activation='relu'),
+                                    tf.keras.layers.Dense(256, input_shape=(out_dims,), activation='relu'),
                                     tf.keras.layers.Dense(128, activation='relu'),
                                     tf.keras.layers.Dense(128, activation='relu'),
-                                    tf.keras.layers.Dense(label_classes, activation='softmax')])
+                                    tf.keras.layers.Dense(num_of_labels)])
       
     def call(self, inputs):
         """Allows for usage of keras API: model.fit, model.evaluate etc.
             Make sure to call model.enable_only_classification() and 
             initialize the model with ml=False in this case.
         """
-        y, y_ab, y_b, _, _ = self.encoder(inputs)
+        y, y_b = self.encoder(inputs)
         # nuisance classifier is only called here, to assure the model is build
         # correctly and dimensions can be automatically infered
-        y_bb = tf.concat([self.flatten(y_ab), self.flatten(y_b)], axis=-1) 
-        self.nuisance_classifier(y_bb)
-        return self.classifier(y)
+        y_b_flat = self.flatten_1(y_b)        
+        y_flat = self.flatten_2(y)
+        y_total = tf.concat([y_flat, y_b_flat], axis=-1)
+        y_logits = y_total[:, :self.num_of_labels]
+        y_nuisance = y_total[:, self.num_of_labels:]
+        self.nuisance_classifier(y_nuisance)
+        return y_logits
         
-    def call_nuisance(self, inputs):
-        _, y_ab, y_b, _, _ = self.encoder(inputs)    
-        y_bb = tf.concat([self.flatten(y_ab), self.flatten(y_b)], axis=-1) 
-        return self.nuisance_classifier(y_bb)
         
     def call_all(self, inputs):
-        y, y_ab, y_b, _, _ = self.encoder(inputs)    
-        y_bb = tf.concat([self.flatten(y_ab), self.flatten(y_b)], axis=-1) 
-        return self.classifier(y), self.nuisance_classifier(y_bb)
+        y, y_b = self.encoder(inputs)
+        # nuisance classifier is only called here, to assure the model is build
+        # correctly and dimensions can be automatically infered
+        y_b_flat = self.flatten_1(y_b)        
+        y_flat = self.flatten_2(y)
+        y_total = tf.concat([y_flat, y_b_flat], axis=-1)
+        y_logits = y_total[:, :self.num_of_labels]
+        y_nuisance = y_total[:, self.num_of_labels:]
+        y_nuisance_logits = self.nuisance_classifier(y_nuisance)
+        return y_logits, y_nuisance, y_nuisance_logits
+        
+    def metameric_sampling(self, logits, nuisance):
+        batch = int_shape(logits)[0]
+        y_total = tf.concat([logits, nuisance], axis=-1)
+        length = y_total.get_shape()[-1]
+        y, y_b = y_total[:, :int(length/2)], y_total[:, int(length/2):]
+        # compute necessary shapes
+        y = tf.reshape(y, shape=[batch] + self.level_2_out_shape)
+        y_b = tf.reshape(y_b, shape=[batch] + self.level_1_out_shape)
+        return self.encoder.invert(y, y_b)
+
         
     def enable_only_classification(self):
         """Freezes all weight that do not feed into the semantic variables."""
         self.encoder.trainable = True  
-        self.encoder.split_1.trainable = False
-        self.encoder.split_2.trainable = False
-        self.classifier.trainable = True
         self.nuisance_classifier.trainable = False
          
     def enable_only_nuisance_classification(self):
         """Freezes all weight that do not feed into the nuisance variables."""
         self.nuisance_classifier.trainable = True
         self.encoder.trainable = False 
-        self.classifier.trainable = False
         
+    def plot_and_save_adv_examples(self, images, trial_num, epoch):
+        assert int_shape(images)[0] == 2
+        image_logits, image_nuisance, _ = self.call_all(images)
+        image_list = []
+        
+        logit_1 = image_logits[0, :]
+        logit_2 = image_logits[1, :]
+        nuis_1 = image_nuisance[0, :]
+        nuis_2 = image_nuisance[1, :]
+        image_list.append(self.metameric_sampling(logit_1, nuis_1))
+        image_list.append(self.metameric_sampling(logit_1, nuis_2))
+        image_list.append(self.metameric_sampling(logit_2, nuis_1))
+        image_list.append(self.metameric_sampling(logit_2, nuis_2))
+        
+        fig, axes = plt.subplots(1, 4, figsize=(16,16))
+        axes = axes.flatten()
+        for img, ax in zip(image_list, axes):
+            ax.imshow(tf.reshape(img, [28,28]))
+            ax.axis('off')
+        plt.tight_layout()
+        plt.show()
+        #fig.savefig('model' + str(trial_num) + '_metameres_epoch_' + str(epoch) +'.png')
+            
         
       
   

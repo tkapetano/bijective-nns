@@ -11,7 +11,7 @@ import numpy as np
 from invertible_layers import Squeeze, Actnorm, Conv1x1, CouplingLayer, SplitLayer
 from blocks import FlowstepACN, FlowstepSqueeze
 from helper import int_shape, split_along_channels, lu_decomposition, DetOne
-from glow import Encoder, GlowNet
+from glow import Encoder, IRevNet #GlowNet
 
 import unittest
 
@@ -122,12 +122,6 @@ class TestCaseLayers(unittest.TestCase):
         self.assertLessEqual(L2NORM(loss_expected, loss_conv.numpy()), 1e-6)
         #print(loss_conv.numpy())
         
-        self.conv_lu(inputs)
-        [loss_conv_lu] = self.conv_lu.losses
-        # not exactly zero because the randomly initialized orthogonal matrix
-        # has only det = 1 up to a small error
-        self.assertLessEqual(L2NORM(loss_expected, loss_conv_lu.numpy()), 1e-6)
-        
         loss_expected =  4. * tf.math.log(tf.nn.sigmoid(2.) + 1e-10)
         self.coupling(inputs)
         [loss_coupling] = self.coupling.losses
@@ -157,8 +151,8 @@ class TestCaseBlocks(unittest.TestCase):
     """
     def setUp(self):
         ml = True 
-        self.flow = FlowstepACN(ml=ml)
-        self.flow_squeeze = FlowstepSqueeze(ml=ml)
+        self.flow = FlowstepACN(ml=ml, lu_decom=False)
+        self.flow_squeeze = FlowstepSqueeze(ml=ml, lu_decom=False)
         
     def test_block_in_and_output_shapes(self):
         inputs = tf.ones([4, 2, 2, 2])
@@ -226,39 +220,34 @@ class TestCaseGlow(unittest.TestCase):
     Testing the module 'glow.py'
     """
     def setUp(self):
-        ml = True 
+        ml = False 
         self.encoder = Encoder(ml=ml)
-        self.model = GlowNet(10, [28,28,1])
+        self.model = IRevNet(10, [28,28,1])
         #self.model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
         t = tf.TensorShape([4, 28, 28, 1])
         self.model.build(t)
-
         
     def test_in_and_output_shapes(self):
         inputs = tf.ones([4, 4, 4, 3])
-        # shapes are tranformed: 4,4,3 -> 2,2,12 -split- 2,2,6 -> 1,1,24 -split- 1,1,12
-        out_1, out_2, out_3, eps_1, eps_2 = self.encoder(inputs)
-        self.assertEqual([4,2,2,6], int_shape(out_3))
-        self.assertEqual([4,2,2,6], int_shape(eps_1))
-        self.assertEqual([4,1,1,12], int_shape(out_1))
-        self.assertEqual([4,1,1,12], int_shape(out_2))
-        self.assertEqual([4,1,1,12], int_shape(eps_2))
+        # shapes are tranformed: 4,4,3 -> 2,2,12 -split- 2,2,6 -> 1,1,24 
+        out_1, out_2 = self.encoder(inputs)
+        self.assertEqual([4,1,1,24], int_shape(out_1))        
+        self.assertEqual([4,2,2,6], int_shape(out_2))
         
-        
-    def test_glow_losses(self):
-        inputs = tf.ones([4, 4, 4, 3])
-        self.encoder(inputs)
-        num_of_losses = 3 * 10 + 2 # 10 flow blocks of 3 losses each + 2 split losses
-        self.assertEqual(num_of_losses, len(self.encoder.losses))
-        
-                
+        inputs = tf.ones((2, 28, 28, 1))
+        out_logits, out_nuisance, out_nui_logits = self.model.call_all(inputs)
+        self.assertEquals([2, 10], int_shape(out_logits))
+        self.assertEquals([2, 28*28-10], int_shape(out_nuisance))
+        self.assertEquals([2, 10], int_shape(out_nui_logits))
+                    
     def test_encoder_inversion(self):
         inputs = tf.ones([4, 4, 4, 3])
-        out_1, out_2, out_3, _, _ = self.encoder(inputs)
-        inputs_reconstruct = self.encoder.invert(out_1, out_2, out_3)
+        out_1, out_2 = self.encoder(inputs)
+        inputs_reconstruct = self.encoder.invert(out_1, out_2)
         self.assertLessEqual(L2NORM(inputs, inputs_reconstruct), 1e-4)
         
-    def test_encode_data_dependent_init(self):
+        
+    def test_encoder_data_dependent_init(self):
         inputs = tf.random.normal((4, 4, 4, 3), mean=5.0, stddev=3.0, seed=1)
         # check for third block as representive
         # after data dependent init activation should be normalized
@@ -271,20 +260,15 @@ class TestCaseGlow(unittest.TestCase):
         self.assertLessEqual(L2NORM(post_mean, 0), 0.75)
         self.assertLessEqual(L2NORM(post_stddev, 1), 0.75)
         
-        
-    def test_glow_enable_parts(self):
-        self.model.enable_only_classification()    
-        num_classifier_weights = len(self.model.encoder.trainable_variables) \
-                                    - len(self.model.encoder.split_1.trainable_variables) \
-                                    - len(self.model.encoder.split_2.trainable_variables) \
-                                    + len(self.model.classifier.trainable_variables)
-        self.assertEqual(num_classifier_weights, len(self.model.trainable_variables))
-        
-        self.model.enable_only_nuisance_classification()
-        num_nuisance_classifier_weights = len(self.model.nuisance_classifier.trainable_variables)
-        self.assertEqual(num_nuisance_classifier_weights, len(self.model.trainable_variables))
+    def test_metameric_sampling(self):
+        inputs = tf.random.normal((2, 28, 28, 1), mean=1.0, stddev=1.0, seed=1)
+        self.model.call(inputs)
+        out_logits, out_nuisance, out_nui_logits = self.model.call_all(inputs)
+        input_recon = self.model.metameric_sampling(out_logits, out_nuisance)
+        self.assertLessEqual(L2NORM(inputs, input_recon), 1e-4)
         
         
+    
 class TestCaseHelper(unittest.TestCase):
     """
     Testing the module 'helper.py'
