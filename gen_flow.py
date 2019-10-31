@@ -104,7 +104,7 @@ def training_mnist(model, dataset, epochs, trial_num):
                 print('Epoch {} has a NLL of {}'.format(epoch+1, loss_value))
             grads = tape.gradient(loss_value, model.trainable_variables)
             optimizer.apply_gradients(zip(grads, model.trainable_variables))  
-        if epoch+1 % 5 == 0:
+        if epoch % 3 == 0:
             model.save_weights('./' + str(trial_num) + '_' + str(epoch+1) )
             test_sampling(model, trial_num, epoch+1)
             
